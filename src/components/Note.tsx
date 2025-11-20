@@ -72,10 +72,11 @@ export const Note = () => {
                 {filePath ? filePath : 'Untitled'}
             </div>
 
+
             {mode === 'edit' ? (
                 // 에디터 모드: 텍스트 입력 영역
                 <textarea
-                    className="w-full h-full bg-transparent resize-none outline-none font-mono text-gray-800 placeholder-gray-500"
+                    className="w-full h-full bg-transparent resize-none outline-none font-sans text-gray-800 placeholder-gray-400 leading-relaxed"
                     placeholder="# Write your note here..."
                     autoFocus
                     value={content}
@@ -83,32 +84,9 @@ export const Note = () => {
                 />
             ) : (
                 // 미리보기 모드: 마크다운 렌더링
-                <div className="w-full h-full overflow-auto prose prose-sm">
+                <div className="w-full h-full overflow-auto prose prose-sm max-w-none prose-headings:font-semibold prose-p:text-gray-700 prose-a:text-blue-600 prose-strong:text-gray-900">
                     <ReactMarkdown remarkPlugins={[remarkGfm]}>{content}</ReactMarkdown>
                 </div>
-            )}
-
-            {/* 하단 컨트롤 버튼 영역 */}
-            <div className="absolute bottom-4 right-4 flex gap-2">
-                <button
-                    onClick={handleSave}
-                    className={`p-2 rounded transition-colors ${isDirty
-                        ? 'bg-blue-500 text-white hover:bg-blue-600'
-                        : 'bg-white/50 hover:bg-white/80'
-                        }`}
-                    aria-label="Save"
-                >
-                    Save
-                </button>
-                <button
-                    onClick={() => setMode(mode === 'edit' ? 'preview' : 'edit')}
-                    className="p-2 bg-white/50 rounded hover:bg-white/80 transition-colors"
-                    aria-label={mode === 'edit' ? 'Preview' : 'Edit'}
-                >
-                    {mode === 'edit' ? 'Preview' : 'Edit'}
-                </button>
-            </div>
-
             {/* 컨텍스트 메뉴 렌더링 */}
             {contextMenu && (
                 <ContextMenu

@@ -1,38 +1,45 @@
 import "./App.css";
+import { useState, useEffect } from "react";
+import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
+import { NotesList } from "./pages/NotesList";
 import { Note } from "./components/Note";
-import { TitleBar } from "./components/TitleBar";
-import { invoke } from "@tauri-apps/api/core";
 
 function App() {
-  // 윈도우 닫기 핸들러
-  const handleClose = async () => {
-    try {
-      await invoke('close_window');
-    } catch (error) {
-      console.error('Failed to close window:', error);
-    }
-  };
+  const [isNoteWindow, setIsNoteWindow] = useState(false);
+  const [loading, setLoading] = useState(true);
 
-  // 윈도우 최소화 핸들러
-  const handleMinimize = async () => {
-    try {
-      await invoke('minimize_window');
-    } catch (error) {
-      console.error('Failed to minimize window:', error);
-    }
-  };
+  useEffect(() => {
+    const checkWindowType = async () => {
+      try {
+        const window = getCurrentWebviewWindow();
+        const label = window.label;
 
-  return (
-    <div className="h-screen w-screen flex flex-col">
-      {/* 타이틀바 */}
-      <TitleBar onClose={handleClose} onMinimize={handleMinimize} />
+        // note-{id} 형식이면 Note 윈도우
+        setIsNoteWindow(label.startsWith('note-'));
+      } catch (error) {
+        console.error('Failed to get window info:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
 
-      {/* 메모 영역 */}
-      <div className="flex-1 overflow-hidden">
-        <Note />
+    checkWindowType();
+  }, []);
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-screen">
+        <p className="text-gray-500">Loading...</p>
       </div>
-    </div>
-  );
+    );
+  }
+
+  // Note 윈도우면 Note 컴포넌트, 아니면 NotesList
+  if (isNoteWindow) {
+    return <Note />;
+  }
+
+  return <NotesList />;
 }
 
 export default App;
