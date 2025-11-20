@@ -14,11 +14,13 @@ describe('ContextMenu Component', () => {
 
     it('renders at the correct position', () => {
         render(<ContextMenu {...defaultProps} />);
-        const menu = screen.getByText('Colors').closest('div');
-        // Note: We are checking the style prop on the second div (the menu itself)
-        // The first div is the backdrop.
-        // A more robust way is to find by test id or class, but structure is simple.
-        expect(menu).toHaveStyle({ top: '100px', left: '100px' });
+        // The second div is the menu container (first is backdrop)
+        // We can find it by looking for the "Colors" text and getting the parent's parent or similar,
+        // or better, add a data-testid to the component. 
+        // For now, let's rely on the structure: backdrop is fixed inset-0, menu is fixed with top/left.
+        const menuText = screen.getByText('Colors');
+        const menuContainer = menuText.parentElement;
+        expect(menuContainer).toHaveStyle({ top: '100px', left: '100px' });
     });
 
     it('calls onColorChange when a color is clicked', () => {

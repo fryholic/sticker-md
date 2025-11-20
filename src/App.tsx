@@ -1,50 +1,37 @@
-import { useState } from "react";
-import reactLogo from "./assets/react.svg";
-import { invoke } from "@tauri-apps/api/core";
 import "./App.css";
+import { Note } from "./components/Note";
+import { TitleBar } from "./components/TitleBar";
+import { invoke } from "@tauri-apps/api/core";
 
 function App() {
-  const [greetMsg, setGreetMsg] = useState("");
-  const [name, setName] = useState("");
+  // 윈도우 닫기 핸들러
+  const handleClose = async () => {
+    try {
+      await invoke('close_window');
+    } catch (error) {
+      console.error('Failed to close window:', error);
+    }
+  };
 
-  async function greet() {
-    // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
-    setGreetMsg(await invoke("greet", { name }));
-  }
+  // 윈도우 최소화 핸들러
+  const handleMinimize = async () => {
+    try {
+      await invoke('minimize_window');
+    } catch (error) {
+      console.error('Failed to minimize window:', error);
+    }
+  };
 
   return (
-    <main className="container">
-      <h1>Welcome to Tauri + React</h1>
+    <div className="h-screen w-screen flex flex-col">
+      {/* 타이틀바 */}
+      <TitleBar onClose={handleClose} onMinimize={handleMinimize} />
 
-      <div className="row">
-        <a href="https://vite.dev" target="_blank">
-          <img src="/vite.svg" className="logo vite" alt="Vite logo" />
-        </a>
-        <a href="https://tauri.app" target="_blank">
-          <img src="/tauri.svg" className="logo tauri" alt="Tauri logo" />
-        </a>
-        <a href="https://react.dev" target="_blank">
-          <img src={reactLogo} className="logo react" alt="React logo" />
-        </a>
+      {/* 메모 영역 */}
+      <div className="flex-1 overflow-hidden">
+        <Note />
       </div>
-      <p>Click on the Tauri, Vite, and React logos to learn more.</p>
-
-      <form
-        className="row"
-        onSubmit={(e) => {
-          e.preventDefault();
-          greet();
-        }}
-      >
-        <input
-          id="greet-input"
-          onChange={(e) => setName(e.currentTarget.value)}
-          placeholder="Enter a name..."
-        />
-        <button type="submit">Greet</button>
-      </form>
-      <p>{greetMsg}</p>
-    </main>
+    </div>
   );
 }
 

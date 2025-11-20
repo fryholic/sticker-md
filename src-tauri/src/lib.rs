@@ -18,8 +18,32 @@ fn save_note(path: String, content: String) -> Result<String, String> {
 // 윈도우 '항상 위에 표시' 설정 변경 커맨드
 #[tauri::command]
 fn set_always_on_top(app: tauri::AppHandle, enabled: bool) -> Result<(), String> {
-    let window = app.get_webview_window("main").ok_or("Main window not found")?;
-    window.set_always_on_top(enabled).map_err(|e| e.to_string())?;
+    let window = app
+        .get_webview_window("main")
+        .ok_or("Main window not found")?;
+    window
+        .set_always_on_top(enabled)
+        .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+// 윈도우 닫기 커맨드
+#[tauri::command]
+fn close_window(app: tauri::AppHandle) -> Result<(), String> {
+    let window = app
+        .get_webview_window("main")
+        .ok_or("Main window not found")?;
+    window.close().map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+// 윈도우 최소화 커맨드
+#[tauri::command]
+fn minimize_window(app: tauri::AppHandle) -> Result<(), String> {
+    let window = app
+        .get_webview_window("main")
+        .ok_or("Main window not found")?;
+    window.minimize().map_err(|e| e.to_string())?;
     Ok(())
 }
 
@@ -27,7 +51,13 @@ fn set_always_on_top(app: tauri::AppHandle, enabled: bool) -> Result<(), String>
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
-        .invoke_handler(tauri::generate_handler![greet, save_note, set_always_on_top])
+        .invoke_handler(tauri::generate_handler![
+            greet,
+            save_note,
+            set_always_on_top,
+            close_window,
+            minimize_window
+        ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
@@ -41,7 +71,7 @@ mod tests {
     fn test_save_note() {
         let path = "test_note.md";
         let content = "# Hello Rust";
-        
+
         // 테스트 전 파일 정리
         if Path::new(path).exists() {
             fs::remove_file(path).unwrap();
@@ -55,7 +85,7 @@ mod tests {
         let mut file = fs::File::open(path).unwrap();
         let mut saved_content = String::new();
         file.read_to_string(&mut saved_content).unwrap();
-        
+
         assert_eq!(saved_content, content);
 
         // 테스트 후 파일 정리
