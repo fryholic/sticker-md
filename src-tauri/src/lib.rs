@@ -47,13 +47,38 @@ fn minimize_window(app: tauri::AppHandle) -> Result<(), String> {
     Ok(())
 }
 
+// 파일 다이얼로그를 통한 저장 커맨드
+#[tauri::command]
+async fn save_note_with_dialog(app: tauri::AppHandle, content: String) -> Result<String, String> {
+    use tauri_plugin_dialog::{DialogExt, FilePath};
+
+    // 파일 저장 다이얼로그 표시
+    let file_path = app
+        .dialog()
+        .file()
+        .add_filter("Markdown", &["md"])
+        .set_file_name("note.md")
+        .blocking_save_file();
+
+    match file_path {
+        Some(FilePath::Path(path)) => {
+            // 파일 저장
+            fs::write(&path, &content).map_err(|e| e.to_string())?;
+            Ok(path.to_string_lossy().to_string())
+        }
+        _ => Err("No file selected".to_string()),
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_dialog::init())
         .invoke_handler(tauri::generate_handler![
             greet,
             save_note,
+            save_note_with_dialog,
             set_always_on_top,
             close_window,
             minimize_window

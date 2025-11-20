@@ -15,6 +15,8 @@ export const Note = () => {
     const [isAlwaysOnTop, setIsAlwaysOnTop] = useState<boolean>(true);
     // 저장되지 않은 변경사항 상태 관리
     const [isDirty, setIsDirty] = useState<boolean>(false);
+    // 파일 경로 상태 관리
+    const [filePath, setFilePath] = useState<string | null>(null);
     // 컨텍스트 메뉴 상태
     const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
 
@@ -27,8 +29,14 @@ export const Note = () => {
     // 파일 저장 핸들러
     const handleSave = async () => {
         try {
-            // Rust 백엔드의 'save_note' 커맨드 호출
-            await invoke('save_note', { path: 'note.md', content });
+            if (filePath) {
+                // 이미 파일 경로가 있으면 해당 경로에 저장
+                await invoke('save_note', { path: filePath, content });
+            } else {
+                // 파일 경로가 없으면 다이얼로그 표시
+                const path = await invoke<string>('save_note_with_dialog', { content });
+                setFilePath(path); // 선택된 경로 저장
+            }
             console.log('Saved successfully');
             setIsDirty(false); // 저장 후 isDirty를 false로 설정
         } catch (error) {
@@ -59,6 +67,11 @@ export const Note = () => {
             style={{ backgroundColor: bgColor }}
             onContextMenu={handleContextMenu}
         >
+            {/* 파일 경로 표시 */}
+            <div className="text-xs text-gray-500 mb-2">
+                {filePath ? filePath : 'Untitled'}
+            </div>
+
             {mode === 'edit' ? (
                 // 에디터 모드: 텍스트 입력 영역
                 <textarea
@@ -80,8 +93,8 @@ export const Note = () => {
                 <button
                     onClick={handleSave}
                     className={`p-2 rounded transition-colors ${isDirty
-                            ? 'bg-blue-500 text-white hover:bg-blue-600'
-                            : 'bg-white/50 hover:bg-white/80'
+                        ? 'bg-blue-500 text-white hover:bg-blue-600'
+                        : 'bg-white/50 hover:bg-white/80'
                         }`}
                     aria-label="Save"
                 >
