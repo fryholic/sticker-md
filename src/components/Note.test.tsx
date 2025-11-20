@@ -45,4 +45,36 @@ describe('Note Component', () => {
             content: '# New Note',
         });
     });
+
+    it('shows unsaved indicator when content is modified', () => {
+        const { getByRole } = render(<Note />);
+        const textarea = getByRole('textbox');
+        const saveBtn = getByRole('button', { name: /save/i });
+
+        // 초기 상태: 저장되지 않은 변경사항 없음
+        expect(saveBtn.className).not.toContain('bg-blue-500');
+
+        // 내용 변경
+        fireEvent.change(textarea, { target: { value: '# Changed' } });
+
+        // 저장되지 않은 변경사항 표시 확인
+        expect(saveBtn.className).toContain('bg-blue-500');
+    });
+
+    it('clears unsaved indicator after saving', async () => {
+        const { invoke } = await import('@tauri-apps/api/core');
+        const { getByRole } = render(<Note />);
+        const textarea = getByRole('textbox');
+        const saveBtn = getByRole('button', { name: /save/i });
+
+        // 내용 변경
+        fireEvent.change(textarea, { target: { value: '# Changed' } });
+        expect(saveBtn.className).toContain('bg-blue-500');
+
+        // 저장
+        fireEvent.click(saveBtn);
+
+        // 저장 후 표시 제거 확인
+        expect(saveBtn.className).not.toContain('bg-blue-500');
+    });
 });
