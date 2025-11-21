@@ -25,7 +25,7 @@ export const TitleBar: React.FC<TitleBarProps> = ({ onClose, onMinimize, onOpenM
     };
 
     return (
-        <div 
+        <div
             className="fixed top-0 left-0 right-0 h-8 flex items-center justify-between z-50"
             onMouseEnter={() => setIsHovered(true)}
             onMouseLeave={() => setIsHovered(false)}
@@ -38,11 +38,11 @@ export const TitleBar: React.FC<TitleBarProps> = ({ onClose, onMinimize, onOpenM
             />
 
             {/* Right Controls */}
-            <div 
+            <div
                 className="flex gap-1 pr-1"
-                style={{ 
-                    opacity: isHovered ? 1 : 0, 
-                    transition: 'opacity 0.2s ease-in-out' 
+                style={{
+                    opacity: isHovered ? 1 : 0,
+                    transition: 'opacity 0.2s ease-in-out'
                 }}
             >
                 {onOpenMain && (
@@ -51,19 +51,20 @@ export const TitleBar: React.FC<TitleBarProps> = ({ onClose, onMinimize, onOpenM
                         style={buttonStyle}
                         aria-label="Open List"
                         title="Open List"
-                        className="hover:bg-black/10 rounded" // Hover 효과는 Tailwind 사용
+                        className="hover:bg-gray-500 rounded group"
                     >
-                        <svg 
-                            xmlns="http://www.w3.org/2000/svg" 
-                            width="20" 
-                            height="20" 
-                            viewBox="0 0 24 24" 
-                            fill="none" 
-                            stroke="#000000" 
-                            strokeWidth="2.5" 
-                            strokeLinecap="round" 
+                        <svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            width="20"
+                            height="20"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="#000000"
+                            strokeWidth="2.5"
+                            strokeLinecap="round"
                             strokeLinejoin="round"
                             style={{ display: 'block' }}
+                            className="group-hover:stroke-gray-300"
                         >
                             <line x1="8" y1="6" x2="21" y2="6"></line>
                             <line x1="8" y1="12" x2="21" y2="12"></line>
@@ -80,19 +81,20 @@ export const TitleBar: React.FC<TitleBarProps> = ({ onClose, onMinimize, onOpenM
                         style={buttonStyle}
                         aria-label="Save"
                         title="Save"
-                        className="hover:bg-black/10 rounded"
+                        className="hover:bg-gray-500 rounded group"
                     >
-                        <svg 
-                            xmlns="http://www.w3.org/2000/svg" 
-                            width="20" 
-                            height="20" 
-                            viewBox="0 0 24 24" 
-                            fill="none" 
-                            stroke="#000000" 
-                            strokeWidth="2.5" 
-                            strokeLinecap="round" 
+                        <svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            width="20"
+                            height="20"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="#000000"
+                            strokeWidth="2.5"
+                            strokeLinecap="round"
                             strokeLinejoin="round"
                             style={{ display: 'block' }}
+                            className="group-hover:stroke-gray-300"
                         >
                             <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path>
                             <polyline points="17 21 17 13 7 13 7 21"></polyline>
@@ -105,19 +107,20 @@ export const TitleBar: React.FC<TitleBarProps> = ({ onClose, onMinimize, onOpenM
                     style={buttonStyle}
                     aria-label="Minimize"
                     title="Minimize"
-                    className="hover:bg-black/10 rounded"
+                    className="hover:bg-gray-500 rounded group"
                 >
-                    <svg 
-                        xmlns="http://www.w3.org/2000/svg" 
-                        width="20" 
-                        height="20" 
-                        viewBox="0 0 24 24" 
-                        fill="none" 
-                        stroke="#000000" 
-                        strokeWidth="2.5" 
-                        strokeLinecap="round" 
+                    <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        width="20"
+                        height="20"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="#000000"
+                        strokeWidth="2.5"
+                        strokeLinecap="round"
                         strokeLinejoin="round"
                         style={{ display: 'block' }}
+                        className="group-hover:stroke-gray-300"
                     >
                         <line x1="5" y1="12" x2="19" y2="12"></line>
                     </svg>
@@ -129,18 +132,18 @@ export const TitleBar: React.FC<TitleBarProps> = ({ onClose, onMinimize, onOpenM
                     title="Close"
                     className="hover:bg-red-500 hover:text-white rounded group/close"
                 >
-                    <svg 
-                        xmlns="http://www.w3.org/2000/svg" 
-                        width="20" 
-                        height="20" 
-                        viewBox="0 0 24 24" 
-                        fill="none" 
-                        stroke="#000000" 
-                        strokeWidth="2.5" 
-                        strokeLinecap="round" 
+                    <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        width="20"
+                        height="20"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="#000000"
+                        strokeWidth="2.5"
+                        strokeLinecap="round"
                         strokeLinejoin="round"
                         style={{ display: 'block' }}
-                        className="group-hover/close:stroke-white" // Hover 시 흰색으로 변경
+                        className="group-hover/close:stroke-gray-300"
                     >
                         <line x1="18" y1="6" x2="6" y2="18"></line>
                         <line x1="6" y1="6" x2="18" y2="18"></line>

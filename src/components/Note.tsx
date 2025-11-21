@@ -10,7 +10,6 @@ import { open } from '@tauri-apps/plugin-dialog';
 import { NotesIndex } from '../types/note';
 import { TitleBar } from './TitleBar';
 import { loadLocalImage } from '../utils/imageLoader'; // Import image loader
-import { Bold, Italic, Underline, Strikethrough, Image as ImageIcon, Eye, Pencil } from 'lucide-react';
 import { useWindowResize } from '../hooks/useWindowResize';
 
 interface NoteProps {
@@ -32,9 +31,9 @@ export const Note = ({ noteId }: NoteProps) => {
     // 배경색 상태 관리
     const [bgColor, setBgColor] = useState<string>('#FFF7D1');
     // 항상 위에 표시 상태 관리 (초기값 false로 변경)
-    const [isAlwaysOnTop, setIsAlwaysOnTop] = useState<boolean>(false);
+    const [_isAlwaysOnTop, setIsAlwaysOnTop] = useState<boolean>(false);
     // 저장되지 않은 변경사항 상태 관리
-    const [isDirty, setIsDirty] = useState<boolean>(false);
+    const [_isDirty, setIsDirty] = useState<boolean>(false);
     // 파일 경로 상태 관리
     const [filePath, setFilePath] = useState<string | null>(null);
     // 텍스트 영역 Ref
@@ -472,7 +471,7 @@ export const Note = ({ noteId }: NoteProps) => {
                     <div className="flex gap-1">
                         <button
                             onClick={() => insertFormat('**')}
-                            className="hover:bg-black/10 rounded"
+                            className="hover:bg-gray-500 rounded group"
                             title="Bold"
                             style={{
                                 backgroundColor: 'transparent',
@@ -486,14 +485,14 @@ export const Note = ({ noteId }: NoteProps) => {
                                 padding: 0,
                             }}
                         >
-                            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#000000" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'block' }}>
+                            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#000000" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'block' }} className="group-hover:stroke-gray-300">
                                 <path d="M6 4h8a4 4 0 0 1 4 4 4 4 0 0 1-4 4H6z"></path>
                                 <path d="M6 12h9a4 4 0 0 1 4 4 4 4 0 0 1-4 4H6z"></path>
                             </svg>
                         </button>
                         <button
                             onClick={() => insertFormat('*')}
-                            className="hover:bg-black/10 rounded"
+                            className="hover:bg-gray-500 rounded group"
                             title="Italic"
                             style={{
                                 backgroundColor: 'transparent',
@@ -507,7 +506,7 @@ export const Note = ({ noteId }: NoteProps) => {
                                 padding: 0,
                             }}
                         >
-                            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#000000" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'block' }}>
+                            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#000000" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'block' }} className="group-hover:stroke-gray-300">
                                 <line x1="19" y1="4" x2="10" y2="4"></line>
                                 <line x1="14" y1="20" x2="5" y2="20"></line>
                                 <line x1="15" y1="4" x2="9" y2="20"></line>
@@ -515,7 +514,7 @@ export const Note = ({ noteId }: NoteProps) => {
                         </button>
                         <button
                             onClick={() => insertFormat('<u>', '</u>')}
-                            className="hover:bg-black/10 rounded"
+                            className="hover:bg-gray-500 rounded group"
                             title="Underline"
                             style={{
                                 backgroundColor: 'transparent',
@@ -529,14 +528,14 @@ export const Note = ({ noteId }: NoteProps) => {
                                 padding: 0,
                             }}
                         >
-                            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#000000" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'block' }}>
+                            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#000000" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'block' }} className="group-hover:stroke-gray-300">
                                 <path d="M6 3v7a6 6 0 0 0 6 6 6 6 0 0 0 6-6V3"></path>
                                 <line x1="4" y1="21" x2="20" y2="21"></line>
                             </svg>
                         </button>
                         <button
                             onClick={() => insertFormat('~~')}
-                            className="hover:bg-black/10 rounded"
+                            className="hover:bg-gray-500 rounded group"
                             title="Strikethrough"
                             style={{
                                 backgroundColor: 'transparent',
@@ -550,7 +549,7 @@ export const Note = ({ noteId }: NoteProps) => {
                                 padding: 0,
                             }}
                         >
-                            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#000000" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'block' }}>
+                            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#000000" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'block' }} className="group-hover:stroke-gray-300">
                                 <path d="M16 4H9a3 3 0 0 0-2.83 4"></path>
                                 <path d="M14 12a4 4 0 0 1 0 8H6"></path>
                                 <line x1="4" y1="12" x2="20" y2="12"></line>
@@ -558,7 +557,7 @@ export const Note = ({ noteId }: NoteProps) => {
                         </button>
                         <button
                             onClick={handleImageInsert}
-                            className="hover:bg-black/10 rounded"
+                            className="hover:bg-gray-500 rounded group"
                             title="Image"
                             style={{
                                 backgroundColor: 'transparent',
@@ -572,7 +571,7 @@ export const Note = ({ noteId }: NoteProps) => {
                                 padding: 0,
                             }}
                         >
-                            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#000000" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'block' }}>
+                            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#000000" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'block' }} className="group-hover:stroke-gray-300">
                                 <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
                                 <circle cx="8.5" cy="8.5" r="1.5"></circle>
                                 <polyline points="21 15 16 10 5 21"></polyline>
@@ -591,7 +590,7 @@ export const Note = ({ noteId }: NoteProps) => {
                         invoke('frontend_log', { message: `Switching to ${newMode} mode` }).catch(console.error);
                         setMode(newMode);
                     }}
-                    className="hover:bg-black/10 rounded flex items-center gap-1"
+                    className="hover:bg-gray-500 rounded flex items-center gap-1 group"
                     title={mode === 'edit' ? 'Switch to Preview' : 'Switch to Edit'}
                     style={{
                         backgroundColor: 'transparent',
@@ -606,12 +605,12 @@ export const Note = ({ noteId }: NoteProps) => {
                     }}
                 >
                     {mode === 'edit' ? (
-                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#000000" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'block' }}>
+                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#000000" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'block' }} className="group-hover:stroke-gray-300">
                             <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
                             <circle cx="12" cy="12" r="3"></circle>
                         </svg>
                     ) : (
-                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#000000" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'block' }}>
+                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#000000" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'block' }} className="group-hover:stroke-gray-300">
                             <path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"></path>
                         </svg>
                     )}

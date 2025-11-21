@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { listen } from '@tauri-apps/api/event';
+import { ask } from '@tauri-apps/plugin-dialog';
+import { Trash2 } from 'lucide-react';
 import type { NotesIndex, NoteMetadata } from '../types/note';
 import { useWindowResize } from '../hooks/useWindowResize';
 
@@ -81,6 +83,25 @@ export const NotesList: React.FC = () => {
         }
     };
 
+    // 메모 삭제
+    const handleDeleteNote = async (noteId: string) => {
+        const confirmed = await ask('삭제하시겠습니까?', {
+            title: 'StickerMd',
+            kind: 'warning',
+            okLabel: '예',
+            cancelLabel: '아니오',
+        });
+
+        if (confirmed) {
+            try {
+                await invoke('delete_note', { id: noteId });
+            } catch (error) {
+                console.error('Failed to delete note:', error);
+                alert(`Failed to delete note: ${error}`);
+            }
+        }
+    };
+
     // useEffect to load notes on mount
     // useEffect(() => {
     //     loadNotes();
@@ -120,7 +141,7 @@ export const NotesList: React.FC = () => {
                 onMouseDown={handleDrag}
             >
                 {/* 1. Left: Title */}
-                <h1 className="text-lg font-semibold text-gray-800 mr-4 pointer-events-none">StickerMd</h1>
+                <h1 className="text-lg font-semibold text-gray-800 mr-4 pointer-events-none">StickerMD</h1>
 
                 {/* Spacer to push controls to right */}
                 <div className="flex-grow" />
@@ -130,7 +151,7 @@ export const NotesList: React.FC = () => {
                     {/* New Note Button */}
                     <button
                         onClick={(e) => { e.stopPropagation(); handleCreateNote(); }}
-                        className="w-8 h-8 flex items-center justify-center bg-blue-500 hover:bg-blue-600 text-white rounded-md transition-colors shadow-sm active:scale-95 cursor-pointer z-50"
+                        className="w-8 h-8 flex items-center justify-center bg-blue-500 hover:bg-blue-600 text-white rounded-md transition-colors cursor-pointer z-50 !border-none !shadow-none"
                         title="New Note"
                         onMouseDown={(e) => e.stopPropagation()}
                     >
@@ -142,7 +163,7 @@ export const NotesList: React.FC = () => {
                     {/* Window Controls */}
                     <button
                         onClick={(e) => { e.stopPropagation(); handleMinimize(); }}
-                        className="w-8 h-8 flex items-center justify-center hover:bg-gray-100 rounded-md text-gray-600 transition-colors cursor-pointer z-50"
+                        className="w-8 h-8 flex items-center justify-center hover:bg-gray-100 rounded-md text-gray-600 transition-colors cursor-pointer z-50 !border-none !shadow-none"
                         title="Minimize"
                         onMouseDown={(e) => e.stopPropagation()}
                     >
@@ -150,7 +171,7 @@ export const NotesList: React.FC = () => {
                     </button>
                     <button
                         onClick={(e) => { e.stopPropagation(); handleClose(); }}
-                        className="w-8 h-8 flex items-center justify-center hover:bg-red-500 hover:text-white rounded-md text-gray-600 transition-colors cursor-pointer z-50"
+                        className="w-8 h-8 flex items-center justify-center hover:bg-red-500 hover:text-white rounded-md text-gray-600 transition-colors cursor-pointer z-50 !border-none !shadow-none"
                         title="Close"
                         onMouseDown={(e) => e.stopPropagation()}
                     >
@@ -171,16 +192,26 @@ export const NotesList: React.FC = () => {
                         {notes.map((note) => (
                             <div
                                 key={note.id}
-                                className="bg-[#FFF7D1] rounded-lg shadow-sm hover:shadow-md transition-all duration-200 p-4 cursor-pointer border border-gray-200/50 hover:border-blue-400 group"
+                                className="relative bg-[#FFF7D1] rounded-lg shadow-sm hover:shadow-md transition-all duration-200 p-4 cursor-pointer border border-gray-200/50 hover:border-blue-400 group"
                                 onClick={() => handleOpenNote(note.id)}
                             >
                                 <h3 className="font-semibold text-gray-900 mb-2 truncate text-base group-hover:text-blue-600 transition-colors">
                                     {note.title}
                                 </h3>
                                 <div className="text-xs text-gray-500 space-y-1">
-                                    <p>Created: {note.created_at ? new Date(note.created_at).toLocaleDateString() : 'Unknown'}</p>
-                                    <p>Updated: {note.updated_at ? new Date(note.updated_at).toLocaleDateString() : 'Unknown'}</p>
+                                    <p>Created: {note.created_at ? new Date(note.created_at).toLocaleString('ko-KR', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }) : 'Unknown'}</p>
+                                    <p>Updated: {note.updated_at ? new Date(note.updated_at).toLocaleString('ko-KR', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }) : 'Unknown'}</p>
                                 </div>
+                                <button
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleDeleteNote(note.id);
+                                    }}
+                                    className="absolute top-2 right-2 !p-1.5 rounded-full !bg-transparent !border-none !shadow-none hover:!bg-red-100 text-gray-400 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all duration-200 z-10"
+                                    title="Delete Note"
+                                >
+                                    <Trash2 size={16} />
+                                </button>
                             </div>
                         ))}
                     </div>

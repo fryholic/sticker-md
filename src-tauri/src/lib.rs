@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::sync::Mutex;
 use tauri::menu::ContextMenu;
 use tauri::Emitter; // Emitter 트레이트 추가
 use tauri::Manager; // ContextMenu 트레이트 추가
@@ -410,6 +411,40 @@ fn save_window_state(id: Option<String>, width: f64, height: f64) -> Result<(), 
     Ok(())
 }
 
+// 노트 삭제 커맨드
+#[tauri::command]
+fn delete_note(app: tauri::AppHandle, id: String) -> Result<(), String> {
+    let mut index = read_index()?;
+
+    // 해당 노트 찾기
+    if let Some(pos) = index.notes.iter().position(|n| n.id == id) {
+        let note = &index.notes[pos];
+        let file_path = PathBuf::from(&note.file_path);
+
+        // 파일 삭제
+        if file_path.exists() {
+            fs::remove_file(&file_path).map_err(|e| e.to_string())?;
+        }
+
+        // 인덱스에서 제거
+        index.notes.remove(pos);
+        write_index(&index)?;
+
+        // 열린 윈도우 닫기
+        let label = format!("note_{}", id);
+        if let Some(window) = app.get_webview_window(&label) {
+            let _ = window.close();
+        }
+
+        // 목록 갱신 이벤트 발행
+        let _ = app.emit("refresh-notes-list", ());
+
+        Ok(())
+    } else {
+        Err("Note not found".to_string())
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -432,7 +467,8 @@ pub fn run() {
             minimize_window,
             frontend_log,
             read_image_binary,
-            save_window_state
+            save_window_state,
+            delete_note
         ])
         .setup(|app| {
             // 앱 시작 시 메인 윈도우 크기 복원
