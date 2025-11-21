@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Note Window</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            font-family: Arial, sans-serif;
+            background-color: #FFF7D1;
+        }
+
+        h1 {
+            color: #333;
+        }
+
+        .info {
+            margin-top: 20px;
+            padding: 10px;
+            background: white;
+            border-radius: 8px;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>✅ 테스트 성공!</h1>
+    <div class="info">
+        <p><strong>노트 윈도우가 작동합니다!</strong></p>
+        <p>Window Label: <span id="label">Loading...</span></p>
+        <p>URL: <span id="url">Loading...</span></p>
+    </div>
+
+    <script type="module">
+        const { getCurrentWebviewWindow } = window.__TAURI__.webviewWindow;
+        const { invoke } = window.__TAURI__.core;
+
+        async function init() {
+            try {
+                const window = getCurrentWebviewWindow();
+                document.getElementById('label').textContent = window.label;
+                document.getElementById('url').textContent = window.location.href;
+
+                await invoke('frontend_log', {
+                    message: `[TEST HTML] Window loaded! Label: ${window.label}`
+                });
+            } catch (error) {
+                console.error('Error:', error);
+                await invoke('frontend_log', {
+                    message: `[TEST HTML] Error: ${error}`
+                });
+            }
+        }
+
+        init();
+    </script>
+</body>
+
+</html>

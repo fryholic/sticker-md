@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { invoke } from '@tauri-apps/api/core';
+import { getCurrentWindow } from '@tauri-apps/api/window';
 import type { NotesIndex, NoteMetadata } from '../types/note';
 
 export const NotesList: React.FC = () => {
@@ -20,28 +21,68 @@ export const NotesList: React.FC = () => {
 
     // 새 메모 생성
     const handleCreateNote = async () => {
+        await invoke('frontend_log', { message: "Create Note Clicked" });
         try {
             const newNote = await invoke<NoteMetadata>('create_new_note');
+            await invoke('frontend_log', { message: `Note Created: ${newNote.id}` });
             setNotes([newNote, ...notes]);
             // 새 메모 윈도우 열기
             await handleOpenNote(newNote.id);
         } catch (error) {
-            console.error('Failed to create note:', error);
+            await invoke('frontend_log', { message: `Failed to create note: ${error}` });
+            alert(`Failed to create note: ${error}`);
+        }
+    };
+
+    // Manual drag handler
+    const handleDrag = async (e: React.MouseEvent) => {
+        // Prevent drag if clicking on buttons (though buttons stop propagation, this is a safety check)
+        if ((e.target as HTMLElement).closest('button')) return;
+
+        console.log("Starting drag...");
+        try {
+            await getCurrentWindow().startDragging();
+            console.log("Drag started");
+        } catch (e) {
+            console.error("Drag failed:", e);
         }
     };
 
     // 메모 윈도우 열기
     const handleOpenNote = async (noteId: string) => {
+        await invoke('frontend_log', { message: `Attempting to open note window for ID: ${noteId}` });
         try {
-            await invoke('open_note_window', { noteId });
+            // Tauri expects camelCase 'noteId' in the invoke call
+            await invoke('open_note_window', { noteId: noteId });
+            await invoke('frontend_log', { message: `Successfully invoked open_note_window for ID: ${noteId}` });
         } catch (error) {
-            console.error('Failed to open note:', error);
+            await invoke('frontend_log', { message: `Failed to open note: ${error}` });
+            alert(`Failed to open note window: ${error}`);
         }
     };
 
+    // useEffect to load notes on mount
     useEffect(() => {
         loadNotes();
     }, []);
+
+    // 윈도우 닫기
+    const handleClose = async () => {
+        try {
+            await invoke('close_window');
+        } catch (error) {
+            console.error('Failed to close window:', error);
+        }
+    };
+
+    // 윈도우 최소화
+    const handleMinimize = async () => {
+        try {
+            await invoke('minimize_window');
+        } catch (error) {
+            console.error('Failed to minimize window:', error);
+        }
+    };
 
     if (loading) {
         return (
@@ -52,108 +93,79 @@ export const NotesList: React.FC = () => {
     }
 
     return (
-        <div className="h-screen w-screen bg-gray-50 flex flex-col">
-            {/* Header */}
-            <div className="bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between">
-                <h1 className="text-2xl font-semibold text-gray-800">Sticky Notes</h1>
-                <button
-                    onClick={handleCreateNote}
-                    className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors flex items-center gap-2"
-                >
-                    import React, {useState, useEffect} from 'react';
-                    import {invoke} from '@tauri-apps/api/core';
-                    import type {NotesIndex, NoteMetadata} from '../types/note';
+        <div className="h-full w-full bg-[#F6F6F6] flex flex-col border border-gray-300 rounded-lg overflow-hidden shadow-xl">
+            {/* Header Area - Draggable */}
+            <div
+                className="h-12 bg-white border-b border-gray-200 flex items-center px-4 shrink-0 select-none cursor-move"
+                onMouseDown={handleDrag}
+            >
+                {/* 1. Left: Title */}
+                <h1 className="text-lg font-semibold text-gray-800 mr-4 pointer-events-none">Sticky Notes</h1>
 
-export const NotesList: React.FC = () => {
-    const [notes, setNotes] = useState<NoteMetadata[]>([]);
-                    const [loading, setLoading] = useState(true);
+                {/* Spacer to push controls to right */}
+                <div className="flex-grow" />
 
-    // 메모 목록 로드
-    const loadNotes = async () => {
-        try {
-            const index = await invoke<NotesIndex>('get_notes_list');
-                        setNotes(index.notes);
-        } catch (error) {
-                            console.error('Failed to load notes:', error);
-        } finally {
-                            setLoading(false);
-        }
-    };
+                {/* 3. Right: Controls */}
+                <div className="flex items-center gap-2 ml-4">
+                    {/* New Note Button */}
+                    <button
+                        onClick={(e) => { e.stopPropagation(); handleCreateNote(); }}
+                        className="w-8 h-8 flex items-center justify-center bg-blue-500 hover:bg-blue-600 text-white rounded-md transition-colors shadow-sm active:scale-95 cursor-pointer z-50"
+                        title="New Note"
+                        onMouseDown={(e) => e.stopPropagation()}
+                    >
+                        <span className="text-xl font-bold leading-none">+</span>
+                    </button>
 
-    // 새 메모 생성
-    const handleCreateNote = async () => {
-        try {
-            const newNote = await invoke<NoteMetadata>('create_new_note');
-                            setNotes([newNote, ...notes]);
-                            // 새 메모 윈도우 열기
-                            await handleOpenNote(newNote.id);
-        } catch (error) {
-                                console.error('Failed to create note:', error);
-        }
-    };
+                    <div className="w-px h-4 bg-gray-300 mx-1"></div>
 
-    // 메모 윈도우 열기
-    const handleOpenNote = async (noteId: string) => {
-        try {
-                                await invoke('open_note_window', { noteId });
-        } catch (error) {
-                                console.error('Failed to open note:', error);
-        }
-    };
+                    {/* Window Controls */}
+                    <button
+                        onClick={(e) => { e.stopPropagation(); handleMinimize(); }}
+                        className="w-8 h-8 flex items-center justify-center hover:bg-gray-100 rounded-md text-gray-600 transition-colors cursor-pointer z-50"
+                        title="Minimize"
+                        onMouseDown={(e) => e.stopPropagation()}
+                    >
+                        &minus;
+                    </button>
+                    <button
+                        onClick={(e) => { e.stopPropagation(); handleClose(); }}
+                        className="w-8 h-8 flex items-center justify-center hover:bg-red-500 hover:text-white rounded-md text-gray-600 transition-colors cursor-pointer z-50"
+                        title="Close"
+                        onMouseDown={(e) => e.stopPropagation()}
+                    >
+                        &times;
+                    </button>
+                </div>
+            </div>
 
-    useEffect(() => {
-                                loadNotes();
-    }, []);
-
-                            if (loading) {
-        return (
-                            <div className="flex items-center justify-center h-screen">
-                                <p className="text-gray-500">Loading notes...</p>
-                            </div>
-                            );
-    }
-
-                            return (
-                            <div className="h-screen w-screen bg-gray-50 flex flex-col">
-                                {/* Header */}
-                                <div className="bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between">
-                                    <h1 className="text-2xl font-semibold text-gray-800">Sticky Notes</h1>
-                                    <button
-                                        onClick={handleCreateNote}
-                                        className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors flex items-center gap-2"
-                                    >
-                                        <span className="text-xl">+</span>
-                                        <span>New Note</span>
-                                    </button>
-                                </div>
-
-                                {/* Notes Grid */}
-                                <div className="flex-1 overflow-auto p-6">
-                                    {notes.length === 0 ? (
-                                        <div className="text-center py-12">
-                                            <p className="text-gray-400 text-lg font-medium">No notes yet</p>
-                                            <p className="text-gray-500 text-sm mt-2">Click "New Note" to create your first note</p>
-                                        </div>
-                                    ) : (
-                                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                                            {notes.map((note) => (
-                                                <div
-                                                    key={note.id}
-                                                    className="bg-white rounded-lg shadow-sm hover:shadow-lg transition-all duration-200 p-4 cursor-pointer border border-gray-200 hover:border-blue-300 hover:-translate-y-1"
-                                                    onClick={() => handleOpenNote(note.id)}
-                                                >
-                                                    <h3 className="font-semibold text-gray-900 mb-2 truncate text-base">
-                                                        {note.title}
-                                                    </h3>
-                                                    <div className="text-xs text-gray-500 space-y-1">
-                                                        <p>Created: {new Date(note.createdAt).toLocaleDateString()}</p>
-                                                        <p>Updated: {new Date(note.updatedAt).toLocaleDateString()}</p>
-                                                    </div>
-                                                </div>
-                                            ))}
-                                        </div>
-                                    )}
+            {/* Notes Grid Area */}
+            <div className="flex-1 overflow-auto p-6">
+                {notes.length === 0 ? (
+                    <div className="text-center py-12">
+                        <p className="text-gray-400 text-lg font-medium">No notes yet</p>
+                        <p className="text-gray-500 text-sm mt-2">Click "+" to create your first note</p>
+                    </div>
+                ) : (
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                        {notes.map((note) => (
+                            <div
+                                key={note.id}
+                                className="bg-[#FFF7D1] rounded-lg shadow-sm hover:shadow-md transition-all duration-200 p-4 cursor-pointer border border-gray-200/50 hover:border-blue-400 group"
+                                onClick={() => handleOpenNote(note.id)}
+                            >
+                                <h3 className="font-semibold text-gray-900 mb-2 truncate text-base group-hover:text-blue-600 transition-colors">
+                                    {note.title}
+                                </h3>
+                                <div className="text-xs text-gray-500 space-y-1">
+                                    <p>Created: {note.created_at ? new Date(note.created_at).toLocaleDateString() : 'Unknown'}</p>
+                                    <p>Updated: {note.updated_at ? new Date(note.updated_at).toLocaleDateString() : 'Unknown'}</p>
                                 </div>
                             </div>
-                            );
+                        ))}
+                    </div>
+                )}
+            </div>
+        </div>
+    );
 };

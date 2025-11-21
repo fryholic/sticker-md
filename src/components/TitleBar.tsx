@@ -1,42 +1,42 @@
-import React from 'react';
-import { X, Minus } from 'lucide-react';
+import React, { useState } from 'react';
 
 interface TitleBarProps {
     onClose: () => void;
     onMinimize: () => void;
 }
 
-// 타이틀바 컴포넌트: 닫기/최소화 버튼을 포함하며 드래그 가능 영역
 export const TitleBar: React.FC<TitleBarProps> = ({ onClose, onMinimize }) => {
+    const [isHovered, setIsHovered] = useState(false);
+
     return (
-        <div
-            data-tauri-drag-region
-            className="h-8 flex items-center justify-end px-2 bg-transparent group relative"
-        >
-            {/* 버튼 그룹 - 기본 숨김, 호버 시 표시 */}
-            <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
-                {/* 최소화 버튼 */}
+        <div className="fixed top-0 left-0 right-0 h-8 flex items-center justify-between z-50">
+            {/* 1. Left Spacer (Drag Handle) */}
+            <div
+                className="flex-grow h-full"
+                data-tauri-drag-region
+                onMouseEnter={() => setIsHovered(true)}
+                onMouseLeave={() => setIsHovered(false)}
+            />
+
+            {/* 2. Right Controls (Clickable, No Drag) */}
+            <div
+                className={`flex gap-1 pr-1 transition-opacity duration-200 ${isHovered ? 'opacity-100' : 'opacity-0'}`}
+                onMouseEnter={() => setIsHovered(true)}
+                onMouseLeave={() => setIsHovered(false)}
+            >
                 <button
-                    onClick={(e) => {
-                        e.stopPropagation(); // 드래그 이벤트 방지
-                        onMinimize();
-                    }}
-                    className="w-6 h-6 flex items-center justify-center rounded hover:bg-black/10 transition-colors"
+                    onClick={onMinimize}
+                    className="w-6 h-6 flex items-center justify-center bg-white/50 hover:bg-white/80 rounded text-gray-700 text-sm transition-colors shadow-sm backdrop-blur-sm"
                     aria-label="Minimize"
                 >
-                    <Minus className="w-4 h-4 text-gray-700" />
+                    &minus;
                 </button>
-
-                {/* 닫기 버튼 */}
                 <button
-                    onClick={(e) => {
-                        e.stopPropagation(); // 드래그 이벤트 방지
-                        onClose();
-                    }}
-                    className="w-6 h-6 flex items-center justify-center rounded hover:bg-red-500 hover:text-white transition-colors"
+                    onClick={onClose}
+                    className="w-6 h-6 flex items-center justify-center bg-white/50 hover:bg-red-500 hover:text-white rounded text-gray-700 text-sm transition-colors shadow-sm backdrop-blur-sm"
                     aria-label="Close"
                 >
-                    <X className="w-4 h-4 text-gray-700" />
+                    &times;
                 </button>
             </div>
         </div>

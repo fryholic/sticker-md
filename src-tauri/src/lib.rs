@@ -1,21 +1,19 @@
-// Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
 use serde::{Deserialize, Serialize};
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use tauri::Manager;
 
-// 메모 메타데이터 구조체
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone)]
 struct NoteMetadata {
     id: String,
     title: String,
     file_path: String,
-    created_at: i64,
-    updated_at: i64,
+    created_at: String,
+    updated_at: String,
 }
 
-// 메모 인덱스 구조체
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
 struct NotesIndex {
     notes: Vec<NoteMetadata>,
 }
@@ -55,7 +53,21 @@ fn read_index() -> Result<NotesIndex, String> {
     }
 
     let content = fs::read_to_string(&index_path).map_err(|e| e.to_string())?;
-    serde_json::from_str(&content).map_err(|e| e.to_string())
+
+    // 파싱 실패 시 빈 인덱스 반환 (오래된 데이터 형식 처리)
+    match serde_json::from_str(&content) {
+        Ok(index) => Ok(index),
+        Err(e) => {
+            println!(
+                "Warning: Failed to parse index.json ({}), creating fresh index",
+                e
+            );
+            // 오래된 파일을 백업하고 새로 시작
+            let backup_path = index_path.with_extension("json.backup");
+            let _ = fs::rename(&index_path, backup_path);
+            Ok(NotesIndex { notes: vec![] })
+        }
+    }
 }
 
 // 인덱스 파일 쓰기
@@ -97,17 +109,16 @@ fn get_notes_list() -> Result<NotesIndex, String> {
 // 새 메모 생성
 #[tauri::command]
 fn create_new_note() -> Result<NoteMetadata, String> {
-    use std::time::{SystemTime, UNIX_EPOCH};
+    use std::time::SystemTime;
     use uuid::Uuid;
 
     // UUID 생성
     let id = Uuid::new_v4().to_string();
+    println!("Creating new note with ID: {}", id);
 
-    // 현재 시간
-    let now = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map_err(|e| e.to_string())?
-        .as_millis() as i64;
+    // 현재 시간 (ISO 8601 형식)
+    let now: chrono::DateTime<chrono::Utc> = SystemTime::now().into();
+    let now_str = now.to_rfc3339();
 
     // 파일 경로
     let notes_dir = get_notes_dir()?;
@@ -121,14 +132,25 @@ fn create_new_note() -> Result<NoteMetadata, String> {
         id: id.clone(),
         title: "Untitled Note".to_string(),
         file_path: file_path.to_string_lossy().to_string(),
-        created_at: now,
-        updated_at: now,
+        created_at: now_str.clone(),
+        updated_at: now_str.clone(),
     };
+
+    println!("DEBUG: Created metadata struct");
+    println!("  id: {}", metadata.id);
+    println!("  title: {}", metadata.title);
+    println!("  file_path: {}", metadata.file_path);
+    println!("  created_at: {}", metadata.created_at);
+    println!("  updated_at: {}", metadata.updated_at);
 
     // 인덱스에 추가
     let mut index = read_index()?;
     index.notes.push(metadata.clone());
     write_index(&index)?;
+
+    // DEBUG: Print the actual JSON being returned
+    let json = serde_json::to_string_pretty(&metadata).unwrap();
+    println!("Returning JSON:\n{}", json);
 
     Ok(metadata)
 }
@@ -136,32 +158,37 @@ fn create_new_note() -> Result<NoteMetadata, String> {
 // 메모 윈도우 열기
 #[tauri::command]
 fn open_note_window(app: tauri::AppHandle, note_id: String) -> Result<(), String> {
-    use tauri::WebviewWindowBuilder;
+    println!("Opening note window for ID: {}", note_id);
 
-    let window_label = format!("note-{}", note_id);
+    let label = format!("note_{}", note_id);
 
-    // 이미 열린 윈도우가 있는지 확인
-    if let Some(window) = app.get_webview_window(&window_label) {
-        // 이미 열려 있으면 포커스만 이동
-        window.set_focus().map_err(|e| e.to_string())?;
+    // 이미 열려있는지 확인
+    if let Some(window) = app.get_webview_window(&label) {
+        println!("Window {} already exists, focusing...", label);
+        let _ = window.set_focus();
         return Ok(());
     }
 
-    // 새 윈도우 생성
-    WebviewWindowBuilder::new(
-        &app,
-        &window_label,
-        tauri::WebviewUrl::App("index.html".into()),
-    )
-    .title("Sticky Note")
-    .inner_size(400.0, 400.0)
-    .decorations(false)
-    .transparent(true)
-    .always_on_top(true)
-    .resizable(true)
-    .build()
-    .map_err(|e| e.to_string())?;
+    println!("Creating new window: {}", label);
 
+    let _window = tauri::WebviewWindowBuilder::new(
+        &app,
+        &label,
+        tauri::WebviewUrl::App("test-note.html".into()), // TEST: Using simple HTML
+    )
+    .title(&format!("Test Note - {}", &note_id[..8]))
+    .inner_size(400.0, 400.0)
+    .decorations(true)
+    .transparent(false)
+    .always_on_top(true)
+    .shadow(true)
+    .build()
+    .map_err(|e| {
+        println!("Failed to build window: {}", e);
+        e.to_string()
+    })?;
+
+    println!("Window {} created successfully", label);
     Ok(())
 }
 
@@ -185,21 +212,16 @@ fn set_always_on_top(app: tauri::AppHandle, enabled: bool) -> Result<(), String>
 }
 
 // 윈도우 닫기 커맨드
+// 윈도우 닫기 커맨드
 #[tauri::command]
-fn close_window(app: tauri::AppHandle) -> Result<(), String> {
-    let window = app
-        .get_webview_window("main")
-        .ok_or("Main window not found")?;
+fn close_window(window: tauri::Window) -> Result<(), String> {
     window.close().map_err(|e| e.to_string())?;
     Ok(())
 }
 
 // 윈도우 최소화 커맨드
 #[tauri::command]
-fn minimize_window(app: tauri::AppHandle) -> Result<(), String> {
-    let window = app
-        .get_webview_window("main")
-        .ok_or("Main window not found")?;
+fn minimize_window(window: tauri::Window) -> Result<(), String> {
     window.minimize().map_err(|e| e.to_string())?;
     Ok(())
 }
@@ -227,6 +249,12 @@ async fn save_note_with_dialog(app: tauri::AppHandle, content: String) -> Result
     }
 }
 
+// 프론트엔드 로그 출력용 커맨드
+#[tauri::command]
+fn frontend_log(message: String) {
+    println!("[FRONTEND]: {}", message);
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -241,7 +269,8 @@ pub fn run() {
             save_note_with_dialog,
             set_always_on_top,
             close_window,
-            minimize_window
+            minimize_window,
+            frontend_log
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

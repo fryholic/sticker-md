@@ -72,7 +72,6 @@ export const Note = () => {
                 {filePath ? filePath : 'Untitled'}
             </div>
 
-
             {mode === 'edit' ? (
                 // 에디터 모드: 텍스트 입력 영역
                 <textarea
@@ -87,6 +86,29 @@ export const Note = () => {
                 <div className="w-full h-full overflow-auto prose prose-sm max-w-none prose-headings:font-semibold prose-p:text-gray-700 prose-a:text-blue-600 prose-strong:text-gray-900">
                     <ReactMarkdown remarkPlugins={[remarkGfm]}>{content}</ReactMarkdown>
                 </div>
+            )}
+
+            {/* 하단 컨트롤 버튼 영역 */}
+            <div className="absolute bottom-4 right-4 flex gap-2">
+                <button
+                    onClick={handleSave}
+                    className={`px-3 py-1.5 rounded-md transition-all duration-200 font-medium text-sm ${isDirty
+                        ? 'bg-blue-500 text-white hover:bg-blue-600 shadow-md hover:shadow-lg'
+                        : 'bg-white/70 hover:bg-white/90 text-gray-700 shadow-sm'
+                        }`}
+                    aria-label="Save"
+                >
+                    Save
+                </button>
+                <button
+                    onClick={() => setMode(mode === 'edit' ? 'preview' : 'edit')}
+                    className="px-3 py-1.5 bg-white/70 hover:bg-white/90 text-gray-700 rounded-md shadow-sm hover:shadow-md transition-all duration-200 font-medium text-sm"
+                    aria-label={mode === 'edit' ? 'Preview' : 'Edit'}
+                >
+                    {mode === 'edit' ? 'Preview' : 'Edit'}
+                </button>
+            </div>
+
             {/* 컨텍스트 메뉴 렌더링 */}
             {contextMenu && (
                 <ContextMenu
