@@ -212,23 +212,119 @@ export const Note = ({ noteId }: NoteProps) => {
             </div>
 
             {/* 하단 툴바 (편집 모드일 때만 표시) */}
-            <div className="absolute bottom-0 left-0 right-0 h-10 px-4 flex items-center justify-between bg-black/5 backdrop-blur-sm opacity-0 hover:opacity-100 transition-opacity duration-200">
+            <div 
+                className="absolute bottom-0 left-0 right-0 h-10 px-4 flex items-center justify-between opacity-0 hover:opacity-100 transition-opacity duration-200"
+                style={{ backgroundColor: 'transparent' }}
+            >
                 {mode === 'edit' ? (
                     <div className="flex gap-1">
-                        <button onClick={() => insertFormat('**')} className="p-1.5 hover:bg-black/10 rounded text-gray-700" title="Bold">
-                            <Bold size={16} />
+                        <button 
+                            onClick={() => insertFormat('**')} 
+                            className="hover:bg-black/10 rounded" 
+                            title="Bold"
+                            style={{
+                                backgroundColor: 'transparent',
+                                border: 'none',
+                                cursor: 'pointer',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                width: '32px',
+                                height: '32px',
+                                padding: 0,
+                            }}
+                        >
+                            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#000000" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'block' }}>
+                                <path d="M6 4h8a4 4 0 0 1 4 4 4 4 0 0 1-4 4H6z"></path>
+                                <path d="M6 12h9a4 4 0 0 1 4 4 4 4 0 0 1-4 4H6z"></path>
+                            </svg>
                         </button>
-                        <button onClick={() => insertFormat('*')} className="p-1.5 hover:bg-black/10 rounded text-gray-700" title="Italic">
-                            <Italic size={16} />
+                        <button 
+                            onClick={() => insertFormat('*')} 
+                            className="hover:bg-black/10 rounded" 
+                            title="Italic"
+                            style={{
+                                backgroundColor: 'transparent',
+                                border: 'none',
+                                cursor: 'pointer',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                width: '32px',
+                                height: '32px',
+                                padding: 0,
+                            }}
+                        >
+                            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#000000" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'block' }}>
+                                <line x1="19" y1="4" x2="10" y2="4"></line>
+                                <line x1="14" y1="20" x2="5" y2="20"></line>
+                                <line x1="15" y1="4" x2="9" y2="20"></line>
+                            </svg>
                         </button>
-                        <button onClick={() => insertFormat('<u>', '</u>')} className="p-1.5 hover:bg-black/10 rounded text-gray-700" title="Underline">
-                            <Underline size={16} />
+                        <button 
+                            onClick={() => insertFormat('<u>', '</u>')} 
+                            className="hover:bg-black/10 rounded" 
+                            title="Underline"
+                            style={{
+                                backgroundColor: 'transparent',
+                                border: 'none',
+                                cursor: 'pointer',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                width: '32px',
+                                height: '32px',
+                                padding: 0,
+                            }}
+                        >
+                            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#000000" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'block' }}>
+                                <path d="M6 3v7a6 6 0 0 0 6 6 6 6 0 0 0 6-6V3"></path>
+                                <line x1="4" y1="21" x2="20" y2="21"></line>
+                            </svg>
                         </button>
-                        <button onClick={() => insertFormat('~~')} className="p-1.5 hover:bg-black/10 rounded text-gray-700" title="Strikethrough">
-                            <Strikethrough size={16} />
+                        <button 
+                            onClick={() => insertFormat('~~')} 
+                            className="hover:bg-black/10 rounded" 
+                            title="Strikethrough"
+                            style={{
+                                backgroundColor: 'transparent',
+                                border: 'none',
+                                cursor: 'pointer',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                width: '32px',
+                                height: '32px',
+                                padding: 0,
+                            }}
+                        >
+                            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#000000" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'block' }}>
+                                <path d="M16 4H9a3 3 0 0 0-2.83 4"></path>
+                                <path d="M14 12a4 4 0 0 1 0 8H6"></path>
+                                <line x1="4" y1="12" x2="20" y2="12"></line>
+                            </svg>
                         </button>
-                        <button onClick={() => insertFormat('![](', ')')} className="p-1.5 hover:bg-black/10 rounded text-gray-700" title="Image">
-                            <ImageIcon size={16} />
+                        <button 
+                            onClick={() => insertFormat('![](', ')')} 
+                            className="hover:bg-black/10 rounded" 
+                            title="Image"
+                            style={{
+                                backgroundColor: 'transparent',
+                                border: 'none',
+                                cursor: 'pointer',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                width: '32px',
+                                height: '32px',
+                                padding: 0,
+                            }}
+                        >
+                            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#000000" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'block' }}>
+                                <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+                                <circle cx="8.5" cy="8.5" r="1.5"></circle>
+                                <polyline points="21 15 16 10 5 21"></polyline>
+                            </svg>
                         </button>
                     </div>
                 ) : (
@@ -238,10 +334,30 @@ export const Note = ({ noteId }: NoteProps) => {
                 {/* 모드 전환 토글 */}
                 <button
                     onClick={() => setMode(mode === 'edit' ? 'preview' : 'edit')}
-                    className="p-1.5 hover:bg-black/10 rounded text-gray-700 flex items-center gap-1"
+                    className="hover:bg-black/10 rounded flex items-center gap-1"
                     title={mode === 'edit' ? 'Switch to Preview' : 'Switch to Edit'}
+                    style={{
+                        backgroundColor: 'transparent',
+                        border: 'none',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        width: '32px',
+                        height: '32px',
+                        padding: 0,
+                    }}
                 >
-                    {mode === 'edit' ? <Eye size={16} /> : <Pencil size={16} />}
+                    {mode === 'edit' ? (
+                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#000000" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'block' }}>
+                            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                            <circle cx="12" cy="12" r="3"></circle>
+                        </svg>
+                    ) : (
+                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#000000" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'block' }}>
+                            <path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"></path>
+                        </svg>
+                    )}
                 </button>
             </div>
         </div>

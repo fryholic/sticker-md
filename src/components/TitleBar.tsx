@@ -1,5 +1,4 @@
 import React, { useState } from 'react';
-import { List, Save, Minus, X } from 'lucide-react';
 
 interface TitleBarProps {
     onClose: () => void;
@@ -11,11 +10,26 @@ interface TitleBarProps {
 export const TitleBar: React.FC<TitleBarProps> = ({ onClose, onMinimize, onOpenMain, onSave }) => {
     const [isHovered, setIsHovered] = useState(false);
 
+    // 공통 버튼 스타일 (인라인 스타일로 강제 적용)
+    const buttonStyle: React.CSSProperties = {
+        backgroundColor: 'transparent',
+        border: 'none',
+        cursor: 'pointer',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        width: '32px',
+        height: '32px',
+        padding: 0,
+        color: '#000000', // 텍스트 색상 강제
+    };
+
     return (
         <div 
-            className="fixed top-0 left-0 right-0 h-8 flex items-center justify-between z-50 group"
+            className="fixed top-0 left-0 right-0 h-8 flex items-center justify-between z-50"
             onMouseEnter={() => setIsHovered(true)}
             onMouseLeave={() => setIsHovered(false)}
+            style={{ backgroundColor: 'transparent' }} // TitleBar 자체 배경 투명
         >
             {/* Drag Handle (takes up remaining space) */}
             <div
@@ -24,42 +38,113 @@ export const TitleBar: React.FC<TitleBarProps> = ({ onClose, onMinimize, onOpenM
             />
 
             {/* Right Controls */}
-            <div className={`flex gap-1 pr-1 transition-opacity duration-200 ${isHovered ? 'opacity-100' : 'opacity-0'}`}>
+            <div 
+                className="flex gap-1 pr-1"
+                style={{ 
+                    opacity: isHovered ? 1 : 0, 
+                    transition: 'opacity 0.2s ease-in-out' 
+                }}
+            >
                 {onOpenMain && (
                     <button
                         onClick={onOpenMain}
-                        className="w-6 h-6 flex items-center justify-center bg-white/50 hover:bg-white/80 rounded text-black transition-colors shadow-sm backdrop-blur-sm cursor-pointer"
+                        style={buttonStyle}
                         aria-label="Open List"
                         title="Open List"
+                        className="hover:bg-black/10 rounded" // Hover 효과는 Tailwind 사용
                     >
-                        <List size={16} color="#000000" strokeWidth={2.5} />
+                        <svg 
+                            xmlns="http://www.w3.org/2000/svg" 
+                            width="20" 
+                            height="20" 
+                            viewBox="0 0 24 24" 
+                            fill="none" 
+                            stroke="#000000" 
+                            strokeWidth="2.5" 
+                            strokeLinecap="round" 
+                            strokeLinejoin="round"
+                            style={{ display: 'block' }}
+                        >
+                            <line x1="8" y1="6" x2="21" y2="6"></line>
+                            <line x1="8" y1="12" x2="21" y2="12"></line>
+                            <line x1="8" y1="18" x2="21" y2="18"></line>
+                            <line x1="3" y1="6" x2="3.01" y2="6"></line>
+                            <line x1="3" y1="12" x2="3.01" y2="12"></line>
+                            <line x1="3" y1="18" x2="3.01" y2="18"></line>
+                        </svg>
                     </button>
                 )}
                 {onSave && (
                     <button
                         onClick={onSave}
-                        className="w-6 h-6 flex items-center justify-center bg-white/50 hover:bg-white/80 rounded text-black transition-colors shadow-sm backdrop-blur-sm cursor-pointer"
+                        style={buttonStyle}
                         aria-label="Save"
                         title="Save"
+                        className="hover:bg-black/10 rounded"
                     >
-                        <Save size={16} color="#000000" strokeWidth={2.5} />
+                        <svg 
+                            xmlns="http://www.w3.org/2000/svg" 
+                            width="20" 
+                            height="20" 
+                            viewBox="0 0 24 24" 
+                            fill="none" 
+                            stroke="#000000" 
+                            strokeWidth="2.5" 
+                            strokeLinecap="round" 
+                            strokeLinejoin="round"
+                            style={{ display: 'block' }}
+                        >
+                            <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path>
+                            <polyline points="17 21 17 13 7 13 7 21"></polyline>
+                            <polyline points="7 3 7 8 15 8"></polyline>
+                        </svg>
                     </button>
                 )}
                 <button
                     onClick={onMinimize}
-                    className="w-6 h-6 flex items-center justify-center bg-white/50 hover:bg-white/80 rounded text-black transition-colors shadow-sm backdrop-blur-sm cursor-pointer"
+                    style={buttonStyle}
                     aria-label="Minimize"
                     title="Minimize"
+                    className="hover:bg-black/10 rounded"
                 >
-                    <Minus size={16} color="#000000" strokeWidth={2.5} />
+                    <svg 
+                        xmlns="http://www.w3.org/2000/svg" 
+                        width="20" 
+                        height="20" 
+                        viewBox="0 0 24 24" 
+                        fill="none" 
+                        stroke="#000000" 
+                        strokeWidth="2.5" 
+                        strokeLinecap="round" 
+                        strokeLinejoin="round"
+                        style={{ display: 'block' }}
+                    >
+                        <line x1="5" y1="12" x2="19" y2="12"></line>
+                    </svg>
                 </button>
                 <button
                     onClick={onClose}
-                    className="w-6 h-6 flex items-center justify-center bg-white/50 hover:bg-red-500 hover:text-white rounded text-black transition-colors shadow-sm backdrop-blur-sm cursor-pointer group/close"
+                    style={buttonStyle}
                     aria-label="Close"
                     title="Close"
+                    className="hover:bg-red-500 hover:text-white rounded group/close"
                 >
-                    <X size={16} className="text-black group-hover/close:text-white" strokeWidth={2.5} />
+                    <svg 
+                        xmlns="http://www.w3.org/2000/svg" 
+                        width="20" 
+                        height="20" 
+                        viewBox="0 0 24 24" 
+                        fill="none" 
+                        stroke="#000000" 
+                        strokeWidth="2.5" 
+                        strokeLinecap="round" 
+                        strokeLinejoin="round"
+                        style={{ display: 'block' }}
+                        className="group-hover/close:stroke-white" // Hover 시 흰색으로 변경
+                    >
+                        <line x1="18" y1="6" x2="6" y2="18"></line>
+                        <line x1="6" y1="6" x2="18" y2="18"></line>
+                    </svg>
                 </button>
             </div>
         </div>
