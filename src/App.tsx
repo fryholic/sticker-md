@@ -12,6 +12,7 @@ function App() {
   invoke('frontend_log', { message: '[App.tsx] App component is loading!' }).catch(console.error);
 
   const [isNoteWindow, setIsNoteWindow] = useState(false);
+  const [noteId, setNoteId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -28,11 +29,13 @@ function App() {
 
         // 라벨이 'note_'로 시작하면 노트 윈도우
         if (label.startsWith('note_')) {
-          const noteId = label.replace('note_', '');
+          const id = label.replace('note_', '');
           setIsNoteWindow(true);
-          await invoke('frontend_log', { message: `[App.tsx] Rendering Note Window for ID: ${noteId}` });
+          setNoteId(id);
+          await invoke('frontend_log', { message: `[App.tsx] Rendering Note Window for ID: ${id}` });
         } else {
           setIsNoteWindow(false);
+          setNoteId(null);
           await invoke('frontend_log', { message: `[App.tsx] Rendering Notes List Window` });
         }
       } catch (error) {
@@ -81,7 +84,7 @@ function App() {
     return (
       <div className="h-screen w-screen relative">
         <TitleBar onClose={handleClose} onMinimize={handleMinimize} />
-        <Note />
+        <Note noteId={noteId} />
       </div>
     );
   }

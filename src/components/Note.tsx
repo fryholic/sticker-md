@@ -1,10 +1,15 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { invoke } from '@tauri-apps/api/core';
 import { ContextMenu } from './ContextMenu';
+import { NotesIndex } from '../types/note';
 
-export const Note = () => {
+interface NoteProps {
+    noteId?: string | null;
+}
+
+export const Note = ({ noteId }: NoteProps) => {
     // 편집 모드와 미리보기 모드 상태 관리 ('edit' | 'preview')
     const [mode, setMode] = useState<'edit' | 'preview'>('edit');
     // 메모 내용 상태 관리
@@ -19,6 +24,33 @@ export const Note = () => {
     const [filePath, setFilePath] = useState<string | null>(null);
     // 컨텍스트 메뉴 상태
     const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
+
+    // 노트 데이터 로드
+    useEffect(() => {
+        const loadNote = async () => {
+            if (!noteId) return;
+
+            try {
+                console.log(`Loading note data for ID: ${noteId}`);
+                // Load content
+                const content = await invoke<string>('load_note_content', { id: noteId });
+                setContent(content);
+                setIsDirty(false);
+
+                // Load metadata to get filePath
+                const index = await invoke<NotesIndex>('get_notes_list');
+                const note = index.notes.find(n => n.id === noteId);
+                if (note) {
+                    setFilePath(note.file_path);
+                    console.log(`Loaded file path: ${note.file_path}`);
+                }
+            } catch (error) {
+                console.error('Failed to load note:', error);
+            }
+        };
+
+        loadNote();
+    }, [noteId]);
 
     // 내용 변경 핸들러
     const handleContentChange = (newContent: string) => {

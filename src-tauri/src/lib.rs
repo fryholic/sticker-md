@@ -157,7 +157,7 @@ fn create_new_note() -> Result<NoteMetadata, String> {
 
 // 메모 윈도우 열기
 #[tauri::command]
-fn open_note_window(app: tauri::AppHandle, note_id: String) -> Result<(), String> {
+async fn open_note_window(app: tauri::AppHandle, note_id: String) -> Result<(), String> {
     println!("Opening note window for ID: {}", note_id);
 
     let label = format!("note_{}", note_id);
@@ -171,25 +171,28 @@ fn open_note_window(app: tauri::AppHandle, note_id: String) -> Result<(), String
 
     println!("Creating new window: {}", label);
 
-    let _window = tauri::WebviewWindowBuilder::new(
+    let builder = tauri::WebviewWindowBuilder::new(
         &app,
         &label,
-        tauri::WebviewUrl::App("test-note.html".into()), // TEST: Using simple HTML
+        tauri::WebviewUrl::App("index.html".into()),
     )
-    .title(&format!("Test Note - {}", &note_id[..8]))
+    .title(&format!("Note"))
     .inner_size(400.0, 400.0)
-    .decorations(true)
-    .transparent(false)
-    .always_on_top(true)
-    .shadow(true)
-    .build()
-    .map_err(|e| {
-        println!("Failed to build window: {}", e);
-        e.to_string()
-    })?;
+    .decorations(false) // 테두리 없음
+    .transparent(false); // 투명도 없음 (일단)
 
-    println!("Window {} created successfully", label);
-    Ok(())
+    println!("Builder created, building window...");
+
+    match builder.build() {
+        Ok(_) => {
+            println!("Window {} created successfully", label);
+            Ok(())
+        }
+        Err(e) => {
+            println!("Failed to build window: {}", e);
+            Err(e.to_string())
+        }
+    }
 }
 
 // 파일 저장 커맨드: 지정된 경로에 내용을 저장합니다.
@@ -197,6 +200,16 @@ fn open_note_window(app: tauri::AppHandle, note_id: String) -> Result<(), String
 fn save_note(path: String, content: String) -> Result<String, String> {
     fs::write(&path, &content).map_err(|e| e.to_string())?;
     Ok(format!("Saved to {}", path))
+}
+
+// 노트 내용 읽기 커맨드
+#[tauri::command]
+fn load_note_content(id: String) -> Result<String, String> {
+    let index = read_index()?;
+    let note = index.notes.iter().find(|n| n.id == id).ok_or("Note not found")?;
+    
+    let content = fs::read_to_string(&note.file_path).map_err(|e| e.to_string())?;
+    Ok(content)
 }
 
 // 윈도우 '항상 위에 표시' 설정 변경 커맨드
@@ -266,6 +279,7 @@ pub fn run() {
             create_new_note,
             open_note_window,
             save_note,
+            load_note_content, // Add this
             save_note_with_dialog,
             set_always_on_top,
             close_window,
