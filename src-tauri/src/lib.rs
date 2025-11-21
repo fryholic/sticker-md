@@ -4,8 +4,8 @@ use std::path::{Path, PathBuf};
 use tauri::menu::ContextMenu;
 use tauri::Emitter; // Emitter 트레이트 추가
 use tauri::Manager; // ContextMenu 트레이트 추가
-// use tauri::http::{Response, StatusCode}; // HTTP 관련 제거
-// use percent_encoding::percent_decode_str; // URL 디코딩 제거
+                    // use tauri::http::{Response, StatusCode}; // HTTP 관련 제거
+                    // use percent_encoding::percent_decode_str; // URL 디코딩 제거
 
 #[derive(Serialize, Deserialize, Clone)]
 struct NoteMetadata {
@@ -14,12 +14,21 @@ struct NoteMetadata {
     file_path: String,
     created_at: String,
     updated_at: String,
+    width: Option<f64>,
+    height: Option<f64>,
+}
+
+#[derive(Serialize, Deserialize, Clone)]
+struct WindowSize {
+    width: f64,
+    height: f64,
 }
 
 #[derive(Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 struct NotesIndex {
     notes: Vec<NoteMetadata>,
+    main_window: Option<WindowSize>,
 }
 
 // 메모 디렉토리 경로 가져오기
@@ -53,7 +62,10 @@ fn read_index() -> Result<NotesIndex, String> {
 
     if !index_path.exists() {
         // index.json이 없으면 빈 인덱스 반환
-        return Ok(NotesIndex { notes: vec![] });
+        return Ok(NotesIndex {
+            notes: vec![],
+            main_window: None,
+        });
     }
 
     let content = fs::read_to_string(&index_path).map_err(|e| e.to_string())?;
@@ -69,7 +81,10 @@ fn read_index() -> Result<NotesIndex, String> {
             // 오래된 파일을 백업하고 새로 시작
             let backup_path = index_path.with_extension("json.backup");
             let _ = fs::rename(&index_path, backup_path);
-            Ok(NotesIndex { notes: vec![] })
+            Ok(NotesIndex {
+                notes: vec![],
+                main_window: None,
+            })
         }
     }
 }
@@ -136,6 +151,8 @@ fn register_note(
         file_path,
         created_at: now_str.clone(),
         updated_at: now_str.clone(),
+        width: Some(400.0),
+        height: Some(400.0),
     };
 
     // 인덱스에 추가
@@ -220,6 +237,18 @@ fn show_context_menu(app: tauri::AppHandle, window: tauri::Window) -> Result<(),
 async fn open_note_window(app: tauri::AppHandle, note_id: String) -> Result<(), String> {
     println!("Opening note window for ID: {}", note_id);
 
+    // 저장된 크기 불러오기
+    let index = read_index()?;
+    let note = index.notes.iter().find(|n| n.id == note_id);
+
+    let (width, height) = if let Some(n) = note {
+        (n.width.unwrap_or(400.0), n.height.unwrap_or(400.0))
+    } else {
+        (400.0, 400.0)
+    };
+
+    println!("Restoring window size: {}x{}", width, height);
+
     let label = format!("note_{}", note_id);
 
     // 이미 열려있는지 확인
@@ -234,7 +263,8 @@ async fn open_note_window(app: tauri::AppHandle, note_id: String) -> Result<(), 
     let builder =
         tauri::WebviewWindowBuilder::new(&app, &label, tauri::WebviewUrl::App("index.html".into()))
             .title(&format!("Note"))
-            .inner_size(400.0, 400.0)
+            .inner_size(width, height)
+            .min_inner_size(300.0, 100.0)
             .decorations(false) // 테두리 없음
             .transparent(false); // 투명도 없음 (일단)
 
@@ -343,7 +373,8 @@ fn read_image_binary(file_path: String) -> Result<Vec<u8>, String> {
 
     // 보안 검사: 허용된 확장자만 접근 가능
     let allowed_extensions = ["png", "jpg", "jpeg", "gif", "webp", "svg"];
-    let extension = path.extension()
+    let extension = path
+        .extension()
         .and_then(|e| e.to_str())
         .map(|e| e.to_lowercase())
         .unwrap_or_default();
@@ -357,6 +388,26 @@ fn read_image_binary(file_path: String) -> Result<Vec<u8>, String> {
         Ok(data) => Ok(data),
         Err(e) => Err(format!("Failed to read file: {}", e)),
     }
+}
+
+// 윈도우 상태 저장 커맨드
+#[tauri::command]
+fn save_window_state(id: Option<String>, width: f64, height: f64) -> Result<(), String> {
+    let mut index = read_index()?;
+
+    if let Some(note_id) = id {
+        // 노트 윈도우
+        if let Some(note) = index.notes.iter_mut().find(|n| n.id == note_id) {
+            note.width = Some(width);
+            note.height = Some(height);
+        }
+    } else {
+        // 메인 윈도우
+        index.main_window = Some(WindowSize { width, height });
+    }
+
+    write_index(&index)?;
+    Ok(())
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -380,8 +431,27 @@ pub fn run() {
             close_window,
             minimize_window,
             frontend_log,
-            read_image_binary
+            read_image_binary,
+            save_window_state
         ])
+        .setup(|app| {
+            // 앱 시작 시 메인 윈도우 크기 복원
+            let index = read_index().unwrap_or(NotesIndex {
+                notes: vec![],
+                main_window: None,
+            });
+
+            if let Some(size) = index.main_window {
+                if let Some(window) = app.get_webview_window("main") {
+                    println!("Restoring main window size: {}x{}", size.width, size.height);
+                    let _ = window.set_size(tauri::Size::Physical(tauri::PhysicalSize {
+                        width: size.width as u32,
+                        height: size.height as u32,
+                    }));
+                }
+            }
+            Ok(())
+        })
         .on_menu_event(|app, event| {
             let id = event.id().as_ref();
             println!("Menu event: {}", id);

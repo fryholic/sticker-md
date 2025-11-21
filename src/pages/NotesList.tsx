@@ -3,10 +3,14 @@ import { invoke } from '@tauri-apps/api/core';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { listen } from '@tauri-apps/api/event';
 import type { NotesIndex, NoteMetadata } from '../types/note';
+import { useWindowResize } from '../hooks/useWindowResize';
 
 export const NotesList: React.FC = () => {
     const [notes, setNotes] = useState<NoteMetadata[]>([]);
     const [loading, setLoading] = useState(true);
+
+    // Window Resize Handler (Main Window)
+    useWindowResize(null);
 
     // 메모 목록 로드
     const loadNotes = async () => {
@@ -41,7 +45,7 @@ export const NotesList: React.FC = () => {
             // 1. UUID 생성
             const newId = await invoke<string>('generate_new_note_id');
             await invoke('frontend_log', { message: `Generated ID: ${newId}` });
-            
+
             // 2. 새 메모 윈도우 열기 (파일은 아직 생성되지 않음)
             await handleOpenNote(newId);
         } catch (error) {
@@ -116,7 +120,7 @@ export const NotesList: React.FC = () => {
                 onMouseDown={handleDrag}
             >
                 {/* 1. Left: Title */}
-                <h1 className="text-lg font-semibold text-gray-800 mr-4 pointer-events-none">Sticky Notes</h1>
+                <h1 className="text-lg font-semibold text-gray-800 mr-4 pointer-events-none">StickerMd</h1>
 
                 {/* Spacer to push controls to right */}
                 <div className="flex-grow" />

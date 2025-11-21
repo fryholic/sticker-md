@@ -11,9 +11,17 @@ import { NotesIndex } from '../types/note';
 import { TitleBar } from './TitleBar';
 import { loadLocalImage } from '../utils/imageLoader'; // Import image loader
 import { Bold, Italic, Underline, Strikethrough, Image as ImageIcon, Eye, Pencil } from 'lucide-react';
+import { useWindowResize } from '../hooks/useWindowResize';
 
 interface NoteProps {
     noteId?: string | null;
+}
+
+
+interface HistoryState {
+    content: string;
+    selectionStart: number;
+    selectionEnd: number;
 }
 
 export const Note = ({ noteId }: NoteProps) => {
@@ -31,6 +39,85 @@ export const Note = ({ noteId }: NoteProps) => {
     const [filePath, setFilePath] = useState<string | null>(null);
     // 텍스트 영역 Ref
     const textareaRef = React.useRef<HTMLTextAreaElement>(null);
+
+    // Window Resize Handler
+    useWindowResize(noteId || null);
+
+    // History Management
+    const [history, setHistory] = useState<HistoryState[]>([{ content: '', selectionStart: 0, selectionEnd: 0 }]);
+    const [historyIndex, setHistoryIndex] = useState(0);
+    const historyTimeoutRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+
+    const saveHistory = (newContent: string, selectionStart: number, selectionEnd: number) => {
+        setHistory(prev => {
+            const newHistory = prev.slice(0, historyIndex + 1);
+            newHistory.push({ content: newContent, selectionStart, selectionEnd });
+            return newHistory;
+        });
+        setHistoryIndex(prev => prev + 1);
+    };
+
+    const undo = () => {
+        if (historyIndex > 0) {
+            const prevState = history[historyIndex - 1];
+            setContent(prevState.content);
+            setHistoryIndex(historyIndex - 1);
+            setTimeout(() => {
+                if (textareaRef.current) {
+                    textareaRef.current.setSelectionRange(prevState.selectionStart, prevState.selectionEnd);
+                    textareaRef.current.focus();
+                }
+            }, 0);
+        }
+    };
+
+    const redo = () => {
+        if (historyIndex < history.length - 1) {
+            const nextState = history[historyIndex + 1];
+            setContent(nextState.content);
+            setHistoryIndex(historyIndex + 1);
+            setTimeout(() => {
+                if (textareaRef.current) {
+                    textareaRef.current.setSelectionRange(nextState.selectionStart, nextState.selectionEnd);
+                    textareaRef.current.focus();
+                }
+            }, 0);
+        }
+    };
+
+    const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+        if (e.key === 'Tab') {
+            e.preventDefault();
+            if (!textareaRef.current) return;
+
+            const textarea = textareaRef.current;
+            const start = textarea.selectionStart;
+            const end = textarea.selectionEnd;
+            const value = textarea.value;
+
+            const newContent = value.substring(0, start) + '    ' + value.substring(end);
+
+            setContent(newContent);
+            setIsDirty(true);
+
+            // Immediate history save for Tab
+            saveHistory(newContent, start + 4, start + 4);
+
+            setTimeout(() => {
+                textarea.selectionStart = textarea.selectionEnd = start + 4;
+            }, 0);
+        } else if ((e.ctrlKey || e.metaKey) && e.key === 'z') {
+            e.preventDefault();
+            if (e.shiftKey) {
+                redo();
+            } else {
+                undo();
+            }
+        } else if ((e.ctrlKey || e.metaKey) && e.key === 'y') {
+            e.preventDefault();
+            redo();
+        }
+    };
 
     // 메뉴 이벤트 리스너
     useEffect(() => {
@@ -71,6 +158,8 @@ export const Note = ({ noteId }: NoteProps) => {
                 const content = await invoke<string>('load_note_content', { id: noteId });
                 setContent(content);
                 setIsDirty(false);
+                setHistory([{ content, selectionStart: 0, selectionEnd: 0 }]);
+                setHistoryIndex(0);
 
                 // Load metadata to get filePath
                 const index = await invoke<NotesIndex>('get_notes_list');
@@ -92,7 +181,7 @@ export const Note = ({ noteId }: NoteProps) => {
     useEffect(() => {
         if (mode === 'preview') {
             console.log('Preview Mode Content:', content);
-            invoke('frontend_log', { message: `Preview Mode Content: ${content}` }).catch(() => {});
+            invoke('frontend_log', { message: `Preview Mode Content: ${content}` }).catch(() => { });
         }
     }, [mode, content]);
 
@@ -100,13 +189,21 @@ export const Note = ({ noteId }: NoteProps) => {
     const handleContentChange = (newContent: string) => {
         setContent(newContent);
         setIsDirty(true); // 내용이 변경되면 isDirty를 true로 설정
+
+        // Debounce history save
+        if (historyTimeoutRef.current) clearTimeout(historyTimeoutRef.current);
+        historyTimeoutRef.current = setTimeout(() => {
+            if (textareaRef.current) {
+                saveHistory(newContent, textareaRef.current.selectionStart, textareaRef.current.selectionEnd);
+            }
+        }, 500);
     };
 
     // 파일 저장 핸들러
     const handleSave = async () => {
         try {
             let currentPath = filePath;
-            
+
             if (!currentPath) {
                 // 파일 경로가 없으면 다이얼로그 표시
                 currentPath = await invoke<string>('save_note_with_dialog', { content });
@@ -119,10 +216,10 @@ export const Note = ({ noteId }: NoteProps) => {
             // 인덱스 등록/업데이트
             if (noteId && currentPath) {
                 const title = content.split('\n')[0]?.replace(/^#+\s*/, '').trim().substring(0, 50) || 'Untitled Note';
-                await invoke('register_note', { 
-                    id: noteId, 
-                    title: title, 
-                    filePath: currentPath 
+                await invoke('register_note', {
+                    id: noteId,
+                    title: title,
+                    filePath: currentPath
                 });
             }
 
@@ -176,27 +273,27 @@ export const Note = ({ noteId }: NoteProps) => {
 
         // 1. 선택된 텍스트 자체가 태그로 감싸져 있는 경우 (예: **text**) -> 태그 제거
         if (selectedText.startsWith(startTag) && selectedText.endsWith(endTag) && selectedText.length >= startTag.length + endTag.length) {
-             const unwrap = selectedText.substring(startTag.length, selectedText.length - endTag.length);
-             newText = text.substring(0, start) + unwrap + text.substring(end);
-             newSelectionEnd = start + unwrap.length;
-        } 
+            const unwrap = selectedText.substring(startTag.length, selectedText.length - endTag.length);
+            newText = text.substring(0, start) + unwrap + text.substring(end);
+            newSelectionEnd = start + unwrap.length;
+        }
         // 2. 선택된 텍스트 주변이 태그로 감싸져 있는 경우 (예: |**text**|) -> 태그 제거
         else {
-             const before = text.substring(0, start);
-             const after = text.substring(end);
-             
-             if (before.endsWith(startTag) && after.startsWith(endTag)) {
-                 newText = text.substring(0, start - startTag.length) + selectedText + text.substring(end + endTag.length);
-                 newSelectionStart = start - startTag.length;
-                 newSelectionEnd = end - startTag.length;
-             } else {
-                 // 3. 태그 추가
-                 newText = text.substring(0, start) + startTag + selectedText + endTag + text.substring(end);
-                 newSelectionStart = start + startTag.length;
-                 newSelectionEnd = end + startTag.length;
-             }
+            const before = text.substring(0, start);
+            const after = text.substring(end);
+
+            if (before.endsWith(startTag) && after.startsWith(endTag)) {
+                newText = text.substring(0, start - startTag.length) + selectedText + text.substring(end + endTag.length);
+                newSelectionStart = start - startTag.length;
+                newSelectionEnd = end - startTag.length;
+            } else {
+                // 3. 태그 추가
+                newText = text.substring(0, start) + startTag + selectedText + endTag + text.substring(end);
+                newSelectionStart = start + startTag.length;
+                newSelectionEnd = end + startTag.length;
+            }
         }
-        
+
         handleContentChange(newText);
 
         setTimeout(() => {
@@ -224,16 +321,16 @@ export const Note = ({ noteId }: NoteProps) => {
                 // 여기서는 백슬래시 이스케이프만 우선 적용
                 const escapedPath = selected.replace(/\\/g, '/'); // 백슬래시를 슬래시로 변경하는 것이 가장 안전함
                 const imageMarkdown = `![${filename}](${escapedPath})`;
-                
+
                 if (!textareaRef.current) return;
                 const textarea = textareaRef.current;
                 const start = textarea.selectionStart;
                 const end = textarea.selectionEnd;
                 const text = textarea.value;
-                
+
                 const newText = text.substring(0, start) + imageMarkdown + text.substring(end);
                 handleContentChange(newText);
-                
+
                 setTimeout(() => {
                     textarea.focus();
                     textarea.setSelectionRange(start + imageMarkdown.length, start + imageMarkdown.length);
@@ -260,9 +357,9 @@ export const Note = ({ noteId }: NoteProps) => {
             style={{ backgroundColor: bgColor }}
             onContextMenu={handleContextMenu}
         >
-            <TitleBar 
-                onClose={handleClose} 
-                onMinimize={handleMinimize} 
+            <TitleBar
+                onClose={handleClose}
+                onMinimize={handleMinimize}
                 onOpenMain={handleOpenMain}
                 onSave={handleSave}
             />
@@ -277,18 +374,19 @@ export const Note = ({ noteId }: NoteProps) => {
                         autoFocus
                         value={content}
                         onChange={(e) => handleContentChange(e.target.value)}
+                        onKeyDown={handleKeyDown}
                     />
                 ) : (
                     // 미리보기 모드: 마크다운 렌더링
                     <div className="w-full h-full overflow-auto prose prose-sm max-w-none prose-headings:font-semibold prose-p:text-gray-700 prose-a:text-blue-600 prose-strong:text-gray-900">
-                        <ReactMarkdown 
+                        <ReactMarkdown
                             remarkPlugins={[remarkGfm]}
                             rehypePlugins={[rehypeRaw]}
                             urlTransform={(url) => url} // 기본 변환 사용 (커스텀 로직 제거)
                             components={{
-                                img: ({node, ...props}) => {
+                                img: ({ node, ...props }) => {
                                     const [imgSrc, setImgSrc] = useState<string | undefined>(undefined);
-                                    
+
                                     useEffect(() => {
                                         let isMounted = true;
                                         let createdUrl: string | null = null;
@@ -303,7 +401,7 @@ export const Note = ({ noteId }: NoteProps) => {
                                                 if (isMounted) setImgSrc(props.src);
                                                 return;
                                             }
-                                            
+
                                             // 로컬 이미지 로딩 (Tauri Command 사용)
                                             try {
                                                 // 경로 정제
@@ -311,11 +409,11 @@ export const Note = ({ noteId }: NoteProps) => {
                                                 if (path.startsWith('file://')) path = path.slice(7);
                                                 // Windows 드라이브 문자 앞의 슬래시 제거 (예: /C:/Users... -> C:/Users...)
                                                 if (path.match(/^\/[a-zA-Z]:/)) path = path.slice(1);
-                                                
+
                                                 console.log(`[ImgComponent] Loading local image path: ${path}`);
 
                                                 const blobUrl = await loadLocalImage(path);
-                                                
+
                                                 if (isMounted) {
                                                     console.log(`[ImgComponent] Set blob URL: ${blobUrl}`);
                                                     createdUrl = blobUrl;
@@ -330,7 +428,7 @@ export const Note = ({ noteId }: NoteProps) => {
                                                 if (isMounted) setImgSrc(props.src); // Fallback
                                             }
                                         };
-                                        
+
                                         load();
 
                                         return () => {
@@ -343,18 +441,18 @@ export const Note = ({ noteId }: NoteProps) => {
                                     }, [props.src]);
 
                                     if (!imgSrc) return <span className="text-gray-400 text-xs">[Loading image...]</span>;
-                                    
+
                                     return (
-                                        <img 
-                                            {...props} 
-                                            src={imgSrc} 
+                                        <img
+                                            {...props}
+                                            src={imgSrc}
                                             onError={(e) => console.error(`[ImgComponent] Image load error for ${imgSrc}`, e)}
                                             onLoad={() => console.log(`[ImgComponent] Image loaded successfully: ${imgSrc}`)}
                                         />
                                     );
                                 },
                                 // 디버깅을 위해 p 태그 렌더링 로그 추가
-                                p: ({node, ...props}) => {
+                                p: ({ node, ...props }) => {
                                     return <p {...props} />;
                                 }
                             }}
@@ -366,15 +464,15 @@ export const Note = ({ noteId }: NoteProps) => {
             </div>
 
             {/* 하단 툴바 (편집 모드일 때만 표시) */}
-            <div 
+            <div
                 className="absolute bottom-0 left-0 right-0 h-10 px-4 flex items-center justify-between opacity-0 hover:opacity-100 transition-opacity duration-200"
                 style={{ backgroundColor: 'transparent' }}
             >
                 {mode === 'edit' ? (
                     <div className="flex gap-1">
-                        <button 
-                            onClick={() => insertFormat('**')} 
-                            className="hover:bg-black/10 rounded" 
+                        <button
+                            onClick={() => insertFormat('**')}
+                            className="hover:bg-black/10 rounded"
                             title="Bold"
                             style={{
                                 backgroundColor: 'transparent',
@@ -393,9 +491,9 @@ export const Note = ({ noteId }: NoteProps) => {
                                 <path d="M6 12h9a4 4 0 0 1 4 4 4 4 0 0 1-4 4H6z"></path>
                             </svg>
                         </button>
-                        <button 
-                            onClick={() => insertFormat('*')} 
-                            className="hover:bg-black/10 rounded" 
+                        <button
+                            onClick={() => insertFormat('*')}
+                            className="hover:bg-black/10 rounded"
                             title="Italic"
                             style={{
                                 backgroundColor: 'transparent',
@@ -415,9 +513,9 @@ export const Note = ({ noteId }: NoteProps) => {
                                 <line x1="15" y1="4" x2="9" y2="20"></line>
                             </svg>
                         </button>
-                        <button 
-                            onClick={() => insertFormat('<u>', '</u>')} 
-                            className="hover:bg-black/10 rounded" 
+                        <button
+                            onClick={() => insertFormat('<u>', '</u>')}
+                            className="hover:bg-black/10 rounded"
                             title="Underline"
                             style={{
                                 backgroundColor: 'transparent',
@@ -436,9 +534,9 @@ export const Note = ({ noteId }: NoteProps) => {
                                 <line x1="4" y1="21" x2="20" y2="21"></line>
                             </svg>
                         </button>
-                        <button 
-                            onClick={() => insertFormat('~~')} 
-                            className="hover:bg-black/10 rounded" 
+                        <button
+                            onClick={() => insertFormat('~~')}
+                            className="hover:bg-black/10 rounded"
                             title="Strikethrough"
                             style={{
                                 backgroundColor: 'transparent',
@@ -458,9 +556,9 @@ export const Note = ({ noteId }: NoteProps) => {
                                 <line x1="4" y1="12" x2="20" y2="12"></line>
                             </svg>
                         </button>
-                        <button 
-                            onClick={handleImageInsert} 
-                            className="hover:bg-black/10 rounded" 
+                        <button
+                            onClick={handleImageInsert}
+                            className="hover:bg-black/10 rounded"
                             title="Image"
                             style={{
                                 backgroundColor: 'transparent',
