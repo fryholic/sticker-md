@@ -207,9 +207,9 @@ export const Note = ({ noteId }: NoteProps) => {
             });
 
             if (selected && typeof selected === 'string') {
-                const assetUrl = convertFileSrc(selected);
+                // 로컬 경로를 그대로 사용
                 const filename = selected.split(/[\\/]/).pop() || 'image';
-                const imageMarkdown = `![${filename}](${assetUrl})`;
+                const imageMarkdown = `![${filename}](${selected})`;
                 
                 if (!textareaRef.current) return;
                 const textarea = textareaRef.current;
@@ -270,6 +270,16 @@ export const Note = ({ noteId }: NoteProps) => {
                         <ReactMarkdown 
                             remarkPlugins={[remarkGfm]}
                             rehypePlugins={[rehypeRaw]}
+                            components={{
+                                img: ({node, ...props}) => {
+                                    // 로컬 경로인 경우 convertFileSrc로 변환
+                                    let src = props.src;
+                                    if (src && !src.startsWith('http') && !src.startsWith('data:')) {
+                                        src = convertFileSrc(src);
+                                    }
+                                    return <img {...props} src={src} />;
+                                }
+                            }}
                         >
                             {content}
                         </ReactMarkdown>

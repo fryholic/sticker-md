@@ -10,7 +10,7 @@
   color: rgba(255, 255, 255, 0.87);
   background-color: transparent;
 
-  font-synthesis: none;
+  font-synthesis: style;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
@@ -211,4 +211,8 @@ body {
 .prose p {
   margin-top: 0.5em;
   margin-bottom: 0.5em;
+}
+
+.prose em {
+  font-style: italic !important;
 }
