@@ -6,6 +6,7 @@ import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import { open } from '@tauri-apps/plugin-dialog';
 import { convertFileSrc } from '@tauri-apps/api/core';
+import { readFile } from '@tauri-apps/plugin-fs'; // Import readFile
 import { NotesIndex } from '../types/note';
 import { TitleBar } from './TitleBar';
 import { Bold, Italic, Underline, Strikethrough, Image as ImageIcon, Eye, Pencil } from 'lucide-react';
@@ -85,6 +86,14 @@ export const Note = ({ noteId }: NoteProps) => {
 
         loadNote();
     }, [noteId]);
+
+    // 모드 전환 시 콘텐츠 로그 출력
+    useEffect(() => {
+        if (mode === 'preview') {
+            console.log('Preview Mode Content:', content);
+            invoke('frontend_log', { message: `Preview Mode Content: ${content}` }).catch(() => {});
+        }
+    }, [mode, content]);
 
     // 내용 변경 핸들러
     const handleContentChange = (newContent: string) => {
@@ -207,9 +216,25 @@ export const Note = ({ noteId }: NoteProps) => {
             });
 
             if (selected && typeof selected === 'string') {
+                // Test reading the file to verify permissions
+                try {
+                    console.log(`Attempting to read file: ${selected}`);
+                    await invoke('frontend_log', { message: `Attempting to read file: ${selected}` });
+                    const contents = await readFile(selected);
+                    console.log(`File read success, size: ${contents.length}`);
+                    await invoke('frontend_log', { message: `File read success, size: ${contents.length}` });
+                } catch (e) {
+                    console.error(`File read failed:`, e);
+                    await invoke('frontend_log', { message: `File read failed: ${e}` });
+                }
+
                 // 로컬 경로를 그대로 사용
                 const filename = selected.split(/[\\/]/).pop() || 'image';
-                const imageMarkdown = `![${filename}](${selected})`;
+                // Windows 경로의 백슬래시를 이스케이프 처리하고, 공백이 있는 경우를 대비해 URL 인코딩
+                // 마크다운에서 괄호가 포함된 경로는 문제가 될 수 있으므로 주의 필요
+                // 여기서는 백슬래시 이스케이프만 우선 적용
+                const escapedPath = selected.replace(/\\/g, '/'); // 백슬래시를 슬래시로 변경하는 것이 가장 안전함
+                const imageMarkdown = `![${filename}](${escapedPath})`;
                 
                 if (!textareaRef.current) return;
                 const textarea = textareaRef.current;
@@ -270,14 +295,124 @@ export const Note = ({ noteId }: NoteProps) => {
                         <ReactMarkdown 
                             remarkPlugins={[remarkGfm]}
                             rehypePlugins={[rehypeRaw]}
+                            urlTransform={(url) => url}
                             components={{
                                 img: ({node, ...props}) => {
-                                    // 로컬 경로인 경우 convertFileSrc로 변환
-                                    let src = props.src;
-                                    if (src && !src.startsWith('http') && !src.startsWith('data:')) {
-                                        src = convertFileSrc(src);
-                                    }
-                                    return <img {...props} src={src} />;
+                                    const [imgSrc, setImgSrc] = useState<string | undefined>(undefined);
+                                    
+                                    useEffect(() => {
+                                        const load = async () => {
+                                            const log = (msg: string) => {
+                                                console.log(msg);
+                                                invoke('frontend_log', { message: msg }).catch(() => {});
+                                            };
+
+                                            log(`[Img Component] Props: ${JSON.stringify(props)}`);
+                                            log(`[Img Component] useEffect for: ${props.src}`);
+                                            
+                                            if (!props.src) {
+                                                log(`[Img Component] No src prop`);
+                                                return;
+                                            }
+
+                                            if (props.src.startsWith('http') || props.src.startsWith('data:') || props.src.startsWith('blob:')) {
+                                                setImgSrc(props.src);
+                                                return;
+                                            }
+                                            
+                                            // Local path
+                                            try {
+                                                // Decode and normalize path
+                                                let path = decodeURIComponent(props.src);
+                                                // Remove file:// prefix if present
+                                                if (path.startsWith('file://')) {
+                                                    path = path.slice(7);
+                                                }
+                                                // Handle Windows drive letters with leading slash (e.g. /C:/...)
+                                                if (path.match(/^\/[a-zA-Z]:/)) {
+                                                    path = path.slice(1);
+                                                }
+                                                
+                                                // Windows path normalization for Tauri scope matching
+                                                // Force backslashes for Windows
+                                                const systemPath = path.replace(/\//g, '\\');
+                                                
+                                                log(`[Img Component] Loading local image: ${path}`);
+                                                log(`[Img Component] System path (Backslash): ${systemPath}`);
+                                                
+                                                // Try reading with systemPath (Backslashes)
+                                                let contents: Uint8Array;
+                                                try {
+                                                    const readPromise = readFile(systemPath);
+                                                    const timeoutPromise = new Promise((_, reject) => 
+                                                        setTimeout(() => reject(new Error('Timeout reading file')), 5000)
+                                                    );
+                                                    contents = await Promise.race([readPromise, timeoutPromise]) as Uint8Array;
+                                                } catch (err) {
+                                                    log(`[Img Component] Failed with backslash path: ${err}`);
+                                                    // Retry with forward slashes if backslash fails
+                                                    const forwardSlashPath = path.replace(/\\/g, '/');
+                                                    log(`[Img Component] Retrying with forward slash path: ${forwardSlashPath}`);
+                                                    
+                                                    try {
+                                                        const readPromise = readFile(forwardSlashPath);
+                                                        const timeoutPromise = new Promise((_, reject) => 
+                                                            setTimeout(() => reject(new Error('Timeout reading file')), 5000)
+                                                        );
+                                                        contents = await Promise.race([readPromise, timeoutPromise]) as Uint8Array;
+                                                    } catch (err2) {
+                                                        log(`[Img Component] Failed with forward slash path: ${err2}`);
+                                                        throw err2;
+                                                    }
+                                                }
+                                                log(`[Img Component] File read success: ${contents.length} bytes`);
+                                                
+                                                // Guess mime type
+                                                const ext = path.split('.').pop()?.toLowerCase();
+                                                const mimeType = ext === 'png' ? 'image/png' : 
+                                                                 ext === 'jpg' || ext === 'jpeg' ? 'image/jpeg' :
+                                                                 ext === 'gif' ? 'image/gif' :
+                                                                 ext === 'webp' ? 'image/webp' :
+                                                                 ext === 'svg' ? 'image/svg+xml' : 'application/octet-stream';
+                                                
+                                                const blob = new Blob([contents as any], { type: mimeType });
+                                                const url = URL.createObjectURL(blob);
+                                                log(`[Img Component] Blob URL created: ${url}`);
+                                                setImgSrc(url);
+                                                
+                                                return () => URL.revokeObjectURL(url);
+                                            } catch (e) {
+                                                const errorMsg = e instanceof Error ? e.message : String(e);
+                                                console.error('Failed to load image:', e);
+                                                log(`[Img Component] Failed to load image ${props.src}: ${errorMsg}`);
+                                                
+                                                // Fallback to convertFileSrc
+                                                try {
+                                                    let path = decodeURIComponent(props.src);
+                                                    if (path.startsWith('file://')) path = path.slice(7);
+                                                    if (path.match(/^\/[a-zA-Z]:/)) path = path.slice(1);
+                                                    
+                                                    const assetUrl = convertFileSrc(path);
+                                                    log(`[Img Component] Fallback to convertFileSrc: ${assetUrl}`);
+                                                    setImgSrc(assetUrl);
+                                                } catch (fallbackErr) {
+                                                    log(`[Img Component] Fallback failed: ${fallbackErr}`);
+                                                }
+                                            }
+                                        };
+                                        
+                                        const cleanupPromise = load();
+                                        return () => {
+                                            cleanupPromise.then(cleanup => cleanup && cleanup());
+                                        };
+                                    }, [props.src]);
+
+                                    if (!imgSrc) return <span className="text-gray-400 text-xs" title={props.src}>[Loading Image...]</span>;
+                                    return <img {...props} src={imgSrc} />;
+                                },
+                                // 디버깅을 위해 p 태그 렌더링 로그 추가
+                                p: ({node, ...props}) => {
+                                    return <p {...props} />;
                                 }
                             }}
                         >
@@ -409,7 +544,12 @@ export const Note = ({ noteId }: NoteProps) => {
 
                 {/* 모드 전환 토글 */}
                 <button
-                    onClick={() => setMode(mode === 'edit' ? 'preview' : 'edit')}
+                    onClick={() => {
+                        const newMode = mode === 'edit' ? 'preview' : 'edit';
+                        console.log(`Switching to ${newMode} mode`);
+                        invoke('frontend_log', { message: `Switching to ${newMode} mode` }).catch(console.error);
+                        setMode(newMode);
+                    }}
                     className="hover:bg-black/10 rounded flex items-center gap-1"
                     title={mode === 'edit' ? 'Switch to Preview' : 'Switch to Edit'}
                     style={{

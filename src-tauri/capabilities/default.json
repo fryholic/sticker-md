@@ -19,8 +19,15 @@
     "fs:default",
     {
       "identifier": "fs:allow-read",
-      "allow": [{ "path": "$HOME/**" }, { "path": "$DESKTOP/**" }, { "path": "$DOWNLOADS/**" }, { "path": "$DOCUMENTS/**" }, { "path": "$PICTURES/**" }]
-    },
-    "core:image:allow-from-path"
+      "allow": [
+        { "path": "$HOME/**" },
+        { "path": "$DESKTOP/**" },
+        { "path": "$DOWNLOADS/**" },
+        { "path": "$DOCUMENTS/**" },
+        { "path": "$PICTURES/**" },
+        { "path": "C:\\Users\\**" },
+        { "path": "C:/Users/**" }
+      ]
+    }
   ]
 }
