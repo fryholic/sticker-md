@@ -27,4 +27,6 @@ uuid = { version = "1", features = ["v4"] }
 dirs = "5"
 chrono = { version = "0.4", features = ["serde"] }
 tauri-plugin-fs = "2"
+percent-encoding = "2.3.2"
+mime_guess = "2.0.5"
 

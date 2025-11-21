@@ -5,10 +5,11 @@ import rehypeRaw from 'rehype-raw';
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import { open } from '@tauri-apps/plugin-dialog';
-import { convertFileSrc } from '@tauri-apps/api/core';
-import { readFile } from '@tauri-apps/plugin-fs'; // Import readFile
+// convertFileSrc import removed
+// readFile import removed
 import { NotesIndex } from '../types/note';
 import { TitleBar } from './TitleBar';
+import { loadLocalImage } from '../utils/imageLoader'; // Import image loader
 import { Bold, Italic, Underline, Strikethrough, Image as ImageIcon, Eye, Pencil } from 'lucide-react';
 
 interface NoteProps {
@@ -216,18 +217,6 @@ export const Note = ({ noteId }: NoteProps) => {
             });
 
             if (selected && typeof selected === 'string') {
-                // Test reading the file to verify permissions
-                try {
-                    console.log(`Attempting to read file: ${selected}`);
-                    await invoke('frontend_log', { message: `Attempting to read file: ${selected}` });
-                    const contents = await readFile(selected);
-                    console.log(`File read success, size: ${contents.length}`);
-                    await invoke('frontend_log', { message: `File read success, size: ${contents.length}` });
-                } catch (e) {
-                    console.error(`File read failed:`, e);
-                    await invoke('frontend_log', { message: `File read failed: ${e}` });
-                }
-
                 // 로컬 경로를 그대로 사용
                 const filename = selected.split(/[\\/]/).pop() || 'image';
                 // Windows 경로의 백슬래시를 이스케이프 처리하고, 공백이 있는 경우를 대비해 URL 인코딩
@@ -295,120 +284,74 @@ export const Note = ({ noteId }: NoteProps) => {
                         <ReactMarkdown 
                             remarkPlugins={[remarkGfm]}
                             rehypePlugins={[rehypeRaw]}
-                            urlTransform={(url) => url}
+                            urlTransform={(url) => url} // 기본 변환 사용 (커스텀 로직 제거)
                             components={{
                                 img: ({node, ...props}) => {
                                     const [imgSrc, setImgSrc] = useState<string | undefined>(undefined);
                                     
                                     useEffect(() => {
+                                        let isMounted = true;
+                                        let createdUrl: string | null = null;
+
                                         const load = async () => {
-                                            const log = (msg: string) => {
-                                                console.log(msg);
-                                                invoke('frontend_log', { message: msg }).catch(() => {});
-                                            };
+                                            if (!props.src) return;
 
-                                            log(`[Img Component] Props: ${JSON.stringify(props)}`);
-                                            log(`[Img Component] useEffect for: ${props.src}`);
-                                            
-                                            if (!props.src) {
-                                                log(`[Img Component] No src prop`);
-                                                return;
-                                            }
+                                            console.log(`[ImgComponent] Requesting src: ${props.src}`);
 
+                                            // 웹 이미지나 이미 처리된 이미지는 그대로 사용
                                             if (props.src.startsWith('http') || props.src.startsWith('data:') || props.src.startsWith('blob:')) {
-                                                setImgSrc(props.src);
+                                                if (isMounted) setImgSrc(props.src);
                                                 return;
                                             }
                                             
-                                            // Local path
+                                            // 로컬 이미지 로딩 (Tauri Command 사용)
                                             try {
-                                                // Decode and normalize path
+                                                // 경로 정제
                                                 let path = decodeURIComponent(props.src);
-                                                // Remove file:// prefix if present
-                                                if (path.startsWith('file://')) {
-                                                    path = path.slice(7);
+                                                if (path.startsWith('file://')) path = path.slice(7);
+                                                // Windows 드라이브 문자 앞의 슬래시 제거 (예: /C:/Users... -> C:/Users...)
+                                                if (path.match(/^\/[a-zA-Z]:/)) path = path.slice(1);
+                                                
+                                                console.log(`[ImgComponent] Loading local image path: ${path}`);
+
+                                                const blobUrl = await loadLocalImage(path);
+                                                
+                                                if (isMounted) {
+                                                    console.log(`[ImgComponent] Set blob URL: ${blobUrl}`);
+                                                    createdUrl = blobUrl;
+                                                    setImgSrc(blobUrl);
+                                                } else {
+                                                    // 컴포넌트가 이미 언마운트되었다면 바로 해제
+                                                    console.log(`[ImgComponent] Component unmounted, revoking: ${blobUrl}`);
+                                                    URL.revokeObjectURL(blobUrl);
                                                 }
-                                                // Handle Windows drive letters with leading slash (e.g. /C:/...)
-                                                if (path.match(/^\/[a-zA-Z]:/)) {
-                                                    path = path.slice(1);
-                                                }
-                                                
-                                                // Windows path normalization for Tauri scope matching
-                                                // Force backslashes for Windows
-                                                const systemPath = path.replace(/\//g, '\\');
-                                                
-                                                log(`[Img Component] Loading local image: ${path}`);
-                                                log(`[Img Component] System path (Backslash): ${systemPath}`);
-                                                
-                                                // Try reading with systemPath (Backslashes)
-                                                let contents: Uint8Array;
-                                                try {
-                                                    const readPromise = readFile(systemPath);
-                                                    const timeoutPromise = new Promise((_, reject) => 
-                                                        setTimeout(() => reject(new Error('Timeout reading file')), 5000)
-                                                    );
-                                                    contents = await Promise.race([readPromise, timeoutPromise]) as Uint8Array;
-                                                } catch (err) {
-                                                    log(`[Img Component] Failed with backslash path: ${err}`);
-                                                    // Retry with forward slashes if backslash fails
-                                                    const forwardSlashPath = path.replace(/\\/g, '/');
-                                                    log(`[Img Component] Retrying with forward slash path: ${forwardSlashPath}`);
-                                                    
-                                                    try {
-                                                        const readPromise = readFile(forwardSlashPath);
-                                                        const timeoutPromise = new Promise((_, reject) => 
-                                                            setTimeout(() => reject(new Error('Timeout reading file')), 5000)
-                                                        );
-                                                        contents = await Promise.race([readPromise, timeoutPromise]) as Uint8Array;
-                                                    } catch (err2) {
-                                                        log(`[Img Component] Failed with forward slash path: ${err2}`);
-                                                        throw err2;
-                                                    }
-                                                }
-                                                log(`[Img Component] File read success: ${contents.length} bytes`);
-                                                
-                                                // Guess mime type
-                                                const ext = path.split('.').pop()?.toLowerCase();
-                                                const mimeType = ext === 'png' ? 'image/png' : 
-                                                                 ext === 'jpg' || ext === 'jpeg' ? 'image/jpeg' :
-                                                                 ext === 'gif' ? 'image/gif' :
-                                                                 ext === 'webp' ? 'image/webp' :
-                                                                 ext === 'svg' ? 'image/svg+xml' : 'application/octet-stream';
-                                                
-                                                const blob = new Blob([contents as any], { type: mimeType });
-                                                const url = URL.createObjectURL(blob);
-                                                log(`[Img Component] Blob URL created: ${url}`);
-                                                setImgSrc(url);
-                                                
-                                                return () => URL.revokeObjectURL(url);
                                             } catch (e) {
-                                                const errorMsg = e instanceof Error ? e.message : String(e);
-                                                console.error('Failed to load image:', e);
-                                                log(`[Img Component] Failed to load image ${props.src}: ${errorMsg}`);
-                                                
-                                                // Fallback to convertFileSrc
-                                                try {
-                                                    let path = decodeURIComponent(props.src);
-                                                    if (path.startsWith('file://')) path = path.slice(7);
-                                                    if (path.match(/^\/[a-zA-Z]:/)) path = path.slice(1);
-                                                    
-                                                    const assetUrl = convertFileSrc(path);
-                                                    log(`[Img Component] Fallback to convertFileSrc: ${assetUrl}`);
-                                                    setImgSrc(assetUrl);
-                                                } catch (fallbackErr) {
-                                                    log(`[Img Component] Fallback failed: ${fallbackErr}`);
-                                                }
+                                                console.error(`[ImgComponent] Failed to load local image: ${props.src}`, e);
+                                                if (isMounted) setImgSrc(props.src); // Fallback
                                             }
                                         };
                                         
-                                        const cleanupPromise = load();
+                                        load();
+
                                         return () => {
-                                            cleanupPromise.then(cleanup => cleanup && cleanup());
+                                            isMounted = false;
+                                            if (createdUrl) {
+                                                console.log(`[ImgComponent] Cleanup revoking: ${createdUrl}`);
+                                                URL.revokeObjectURL(createdUrl);
+                                            }
                                         };
                                     }, [props.src]);
 
-                                    if (!imgSrc) return <span className="text-gray-400 text-xs" title={props.src}>[Loading Image...]</span>;
-                                    return <img {...props} src={imgSrc} />;
+                                    if (!imgSrc) return <span className="text-gray-400 text-xs">[Loading image...]</span>;
+                                    
+                                    return (
+                                        <img 
+                                            {...props} 
+                                            src={imgSrc} 
+                                            onError={(e) => console.error(`[ImgComponent] Image load error for ${imgSrc}`, e)}
+                                            onLoad={() => console.log(`[ImgComponent] Image loaded successfully: ${imgSrc}`)}
+                                        />
+                                    );
                                 },
                                 // 디버깅을 위해 p 태그 렌더링 로그 추가
                                 p: ({node, ...props}) => {

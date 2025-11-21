@@ -1,9 +1,11 @@
 use serde::{Deserialize, Serialize};
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use tauri::menu::ContextMenu;
 use tauri::Emitter; // Emitter 트레이트 추가
 use tauri::Manager; // ContextMenu 트레이트 추가
+// use tauri::http::{Response, StatusCode}; // HTTP 관련 제거
+// use percent_encoding::percent_decode_str; // URL 디코딩 제거
 
 #[derive(Serialize, Deserialize, Clone)]
 struct NoteMetadata {
@@ -333,6 +335,30 @@ fn open_main_window(app: tauri::AppHandle) -> Result<(), String> {
     Ok(())
 }
 
+// 이미지 파일 바이너리 읽기
+#[tauri::command]
+fn read_image_binary(file_path: String) -> Result<Vec<u8>, String> {
+    println!("Reading image binary: {}", file_path);
+    let path = PathBuf::from(&file_path);
+
+    // 보안 검사: 허용된 확장자만 접근 가능
+    let allowed_extensions = ["png", "jpg", "jpeg", "gif", "webp", "svg"];
+    let extension = path.extension()
+        .and_then(|e| e.to_str())
+        .map(|e| e.to_lowercase())
+        .unwrap_or_default();
+
+    if !allowed_extensions.contains(&extension.as_str()) {
+        return Err(format!("Forbidden file extension: {}", extension));
+    }
+
+    // 파일 읽기
+    match fs::read(&path) {
+        Ok(data) => Ok(data),
+        Err(e) => Err(format!("Failed to read file: {}", e)),
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -353,13 +379,15 @@ pub fn run() {
             set_always_on_top,
             close_window,
             minimize_window,
-            frontend_log
+            frontend_log,
+            read_image_binary
         ])
         .on_menu_event(|app, event| {
             let id = event.id().as_ref();
             println!("Menu event: {}", id);
             let _ = app.emit("menu-event", id);
         })
+        // .register_uri_scheme_protocol("sticker", |_app, request| { ... }) // Removed custom protocol
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
