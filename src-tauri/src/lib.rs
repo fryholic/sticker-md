@@ -2,6 +2,8 @@ use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::PathBuf;
 use tauri::Manager;
+use tauri::Emitter; // Emitter 트레이트 추가
+use tauri::menu::ContextMenu; // ContextMenu 트레이트 추가
 
 #[derive(Serialize, Deserialize, Clone)]
 struct NoteMetadata {
@@ -106,7 +108,77 @@ fn get_notes_list() -> Result<NotesIndex, String> {
     read_index()
 }
 
-// 새 메모 생성
+// UUID 생성 커맨드
+#[tauri::command]
+fn generate_new_note_id() -> String {
+    uuid::Uuid::new_v4().to_string()
+}
+
+// 노트 등록 커맨드 (저장 후 인덱스에 추가)
+#[tauri::command]
+fn register_note(id: String, title: String, file_path: String) -> Result<NoteMetadata, String> {
+    use std::time::SystemTime;
+
+    // 현재 시간 (ISO 8601 형식)
+    let now: chrono::DateTime<chrono::Utc> = SystemTime::now().into();
+    let now_str = now.to_rfc3339();
+
+    let metadata = NoteMetadata {
+        id,
+        title,
+        file_path,
+        created_at: now_str.clone(),
+        updated_at: now_str.clone(),
+    };
+
+    // 인덱스에 추가
+    let mut index = read_index()?;
+    // 이미 존재하는지 확인 (업데이트)
+    if let Some(existing) = index.notes.iter_mut().find(|n| n.id == metadata.id) {
+        existing.title = metadata.title.clone();
+        existing.file_path = metadata.file_path.clone();
+        existing.updated_at = now_str;
+    } else {
+        index.notes.push(metadata.clone());
+    }
+    
+    write_index(&index)?;
+    Ok(metadata)
+}
+
+// 컨텍스트 메뉴 표시 커맨드
+#[tauri::command]
+fn show_context_menu(app: tauri::AppHandle, window: tauri::Window) -> Result<(), String> {
+    use tauri::menu::{MenuBuilder, MenuItemBuilder, CheckMenuItemBuilder, SubmenuBuilder};
+
+    let is_always_on_top = window.is_always_on_top().unwrap_or(false);
+
+    let toggle_top = CheckMenuItemBuilder::new("Always on Top")
+        .id("toggle_top")
+        .checked(is_always_on_top)
+        .build(&app)
+        .map_err(|e| e.to_string())?;
+
+    let colors = SubmenuBuilder::new(&app, "Change Color")
+        .item(&MenuItemBuilder::new("Yellow").id("color_#FFF7D1").build(&app).map_err(|e| e.to_string())?)
+        .item(&MenuItemBuilder::new("Blue").id("color_#E0F7FA").build(&app).map_err(|e| e.to_string())?)
+        .item(&MenuItemBuilder::new("Green").id("color_#E8F5E9").build(&app).map_err(|e| e.to_string())?)
+        .item(&MenuItemBuilder::new("Pink").id("color_#FCE4EC").build(&app).map_err(|e| e.to_string())?)
+        .item(&MenuItemBuilder::new("Purple").id("color_#F3E5F5").build(&app).map_err(|e| e.to_string())?)
+        .build()
+        .map_err(|e| e.to_string())?;
+
+    let menu = MenuBuilder::new(&app)
+        .item(&toggle_top)
+        .item(&colors)
+        .build()
+        .map_err(|e| e.to_string())?;
+
+    menu.popup(window).map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+// 새 메모 생성 (Deprecated - use generate_new_note_id + register_note)
 #[tauri::command]
 fn create_new_note() -> Result<NoteMetadata, String> {
     use std::time::SystemTime;
@@ -214,10 +286,7 @@ fn load_note_content(id: String) -> Result<String, String> {
 
 // 윈도우 '항상 위에 표시' 설정 변경 커맨드
 #[tauri::command]
-fn set_always_on_top(app: tauri::AppHandle, enabled: bool) -> Result<(), String> {
-    let window = app
-        .get_webview_window("main")
-        .ok_or("Main window not found")?;
+fn set_always_on_top(window: tauri::Window, enabled: bool) -> Result<(), String> {
     window
         .set_always_on_top(enabled)
         .map_err(|e| e.to_string())?;
@@ -277,15 +346,23 @@ pub fn run() {
             greet,
             get_notes_list,
             create_new_note,
+            generate_new_note_id,
+            register_note,
+            show_context_menu, // Add this
             open_note_window,
             save_note,
-            load_note_content, // Add this
+            load_note_content,
             save_note_with_dialog,
             set_always_on_top,
             close_window,
             minimize_window,
             frontend_log
         ])
+        .on_menu_event(|app, event| {
+            let id = event.id().as_ref();
+            println!("Menu event: {}", id);
+            let _ = app.emit("menu-event", id);
+        })
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { invoke } from '@tauri-apps/api/core';
-import { ContextMenu } from './ContextMenu';
+import { listen } from '@tauri-apps/api/event';
 import { NotesIndex } from '../types/note';
 
 interface NoteProps {
@@ -22,8 +22,33 @@ export const Note = ({ noteId }: NoteProps) => {
     const [isDirty, setIsDirty] = useState<boolean>(false);
     // 파일 경로 상태 관리
     const [filePath, setFilePath] = useState<string | null>(null);
-    // 컨텍스트 메뉴 상태
-    const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
+
+    // 메뉴 이벤트 리스너
+    useEffect(() => {
+        const unlistenPromise = listen<string>('menu-event', (event) => {
+            // 포커스가 있는 경우에만 처리 (간단한 구분)
+            if (!document.hasFocus()) return;
+
+            const id = event.payload;
+            console.log('Menu event received:', id);
+
+            if (id === 'toggle_top') {
+                // 상태 업데이트 함수형으로 처리하여 최신 상태 보장
+                setIsAlwaysOnTop(prev => {
+                    const newState = !prev;
+                    invoke('set_always_on_top', { enabled: newState }).catch(console.error);
+                    return newState;
+                });
+            } else if (id.startsWith('color_')) {
+                const color = id.replace('color_', '');
+                setBgColor(color);
+            }
+        });
+
+        return () => {
+            unlistenPromise.then(unlisten => unlisten());
+        };
+    }, []);
 
     // 노트 데이터 로드
     useEffect(() => {
@@ -45,7 +70,8 @@ export const Note = ({ noteId }: NoteProps) => {
                     console.log(`Loaded file path: ${note.file_path}`);
                 }
             } catch (error) {
-                console.error('Failed to load note:', error);
+                console.log('New note or failed to load:', error);
+                // New note case: do nothing, start empty
             }
         };
 
@@ -61,14 +87,27 @@ export const Note = ({ noteId }: NoteProps) => {
     // 파일 저장 핸들러
     const handleSave = async () => {
         try {
-            if (filePath) {
-                // 이미 파일 경로가 있으면 해당 경로에 저장
-                await invoke('save_note', { path: filePath, content });
-            } else {
+            let currentPath = filePath;
+            
+            if (!currentPath) {
                 // 파일 경로가 없으면 다이얼로그 표시
-                const path = await invoke<string>('save_note_with_dialog', { content });
-                setFilePath(path); // 선택된 경로 저장
+                currentPath = await invoke<string>('save_note_with_dialog', { content });
+                setFilePath(currentPath); // 선택된 경로 저장
+            } else {
+                // 이미 파일 경로가 있으면 해당 경로에 저장
+                await invoke('save_note', { path: currentPath, content });
             }
+
+            // 인덱스 등록/업데이트
+            if (noteId && currentPath) {
+                const title = content.split('\n')[0]?.replace(/^#+\s*/, '').trim().substring(0, 50) || 'Untitled Note';
+                await invoke('register_note', { 
+                    id: noteId, 
+                    title: title, 
+                    filePath: currentPath 
+                });
+            }
+
             console.log('Saved successfully');
             setIsDirty(false); // 저장 후 isDirty를 false로 설정
         } catch (error) {
@@ -76,20 +115,13 @@ export const Note = ({ noteId }: NoteProps) => {
         }
     };
 
-    // 우클릭 핸들러
-    const handleContextMenu = (e: React.MouseEvent) => {
+    // 우클릭 핸들러 (Native Menu)
+    const handleContextMenu = async (e: React.MouseEvent) => {
         e.preventDefault();
-        setContextMenu({ x: e.clientX, y: e.clientY });
-    };
-
-    // 항상 위에 표시 토글 핸들러
-    const toggleAlwaysOnTop = async () => {
-        const newState = !isAlwaysOnTop;
-        setIsAlwaysOnTop(newState);
         try {
-            await invoke('set_always_on_top', { enabled: newState });
+            await invoke('show_context_menu');
         } catch (error) {
-            console.error('Failed to toggle always on top:', error);
+            console.error('Failed to show context menu:', error);
         }
     };
 
@@ -99,11 +131,6 @@ export const Note = ({ noteId }: NoteProps) => {
             style={{ backgroundColor: bgColor }}
             onContextMenu={handleContextMenu}
         >
-            {/* 파일 경로 표시 */}
-            <div className="text-xs text-gray-500 mb-2">
-                {filePath ? filePath : 'Untitled'}
-            </div>
-
             {mode === 'edit' ? (
                 // 에디터 모드: 텍스트 입력 영역
                 <textarea
@@ -140,18 +167,6 @@ export const Note = ({ noteId }: NoteProps) => {
                     {mode === 'edit' ? 'Preview' : 'Edit'}
                 </button>
             </div>
-
-            {/* 컨텍스트 메뉴 렌더링 */}
-            {contextMenu && (
-                <ContextMenu
-                    x={contextMenu.x}
-                    y={contextMenu.y}
-                    onClose={() => setContextMenu(null)}
-                    onColorChange={setBgColor}
-                    onAlwaysOnTopToggle={toggleAlwaysOnTop}
-                    isAlwaysOnTop={isAlwaysOnTop}
-                />
-            )}
         </div>
     );
 };

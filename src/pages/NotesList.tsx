@@ -23,11 +23,12 @@ export const NotesList: React.FC = () => {
     const handleCreateNote = async () => {
         await invoke('frontend_log', { message: "Create Note Clicked" });
         try {
-            const newNote = await invoke<NoteMetadata>('create_new_note');
-            await invoke('frontend_log', { message: `Note Created: ${newNote.id}` });
-            setNotes([newNote, ...notes]);
-            // 새 메모 윈도우 열기
-            await handleOpenNote(newNote.id);
+            // 1. UUID 생성
+            const newId = await invoke<string>('generate_new_note_id');
+            await invoke('frontend_log', { message: `Generated ID: ${newId}` });
+            
+            // 2. 새 메모 윈도우 열기 (파일은 아직 생성되지 않음)
+            await handleOpenNote(newId);
         } catch (error) {
             await invoke('frontend_log', { message: `Failed to create note: ${error}` });
             alert(`Failed to create note: ${error}`);
