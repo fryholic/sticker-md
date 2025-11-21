@@ -116,7 +116,7 @@ fn generate_new_note_id() -> String {
 
 // 노트 등록 커맨드 (저장 후 인덱스에 추가)
 #[tauri::command]
-fn register_note(id: String, title: String, file_path: String) -> Result<NoteMetadata, String> {
+fn register_note(app: tauri::AppHandle, id: String, title: String, file_path: String) -> Result<NoteMetadata, String> {
     use std::time::SystemTime;
 
     // 현재 시간 (ISO 8601 형식)
@@ -143,6 +143,10 @@ fn register_note(id: String, title: String, file_path: String) -> Result<NoteMet
     }
     
     write_index(&index)?;
+
+    // 이벤트 발행: 노트 목록이 변경되었음을 알림
+    let _ = app.emit("refresh-notes-list", ());
+
     Ok(metadata)
 }
 
@@ -152,6 +156,7 @@ fn show_context_menu(app: tauri::AppHandle, window: tauri::Window) -> Result<(),
     use tauri::menu::{MenuBuilder, MenuItemBuilder, CheckMenuItemBuilder, SubmenuBuilder};
 
     let is_always_on_top = window.is_always_on_top().unwrap_or(false);
+    println!("Current always_on_top state: {}", is_always_on_top);
 
     let toggle_top = CheckMenuItemBuilder::new("Always on Top")
         .id("toggle_top")
@@ -176,55 +181,6 @@ fn show_context_menu(app: tauri::AppHandle, window: tauri::Window) -> Result<(),
 
     menu.popup(window).map_err(|e| e.to_string())?;
     Ok(())
-}
-
-// 새 메모 생성 (Deprecated - use generate_new_note_id + register_note)
-#[tauri::command]
-fn create_new_note() -> Result<NoteMetadata, String> {
-    use std::time::SystemTime;
-    use uuid::Uuid;
-
-    // UUID 생성
-    let id = Uuid::new_v4().to_string();
-    println!("Creating new note with ID: {}", id);
-
-    // 현재 시간 (ISO 8601 형식)
-    let now: chrono::DateTime<chrono::Utc> = SystemTime::now().into();
-    let now_str = now.to_rfc3339();
-
-    // 파일 경로
-    let notes_dir = get_notes_dir()?;
-    let file_path = notes_dir.join(format!("{}.md", id));
-
-    // 빈 파일 생성
-    fs::write(&file_path, "").map_err(|e| e.to_string())?;
-
-    // 메타데이터 생성
-    let metadata = NoteMetadata {
-        id: id.clone(),
-        title: "Untitled Note".to_string(),
-        file_path: file_path.to_string_lossy().to_string(),
-        created_at: now_str.clone(),
-        updated_at: now_str.clone(),
-    };
-
-    println!("DEBUG: Created metadata struct");
-    println!("  id: {}", metadata.id);
-    println!("  title: {}", metadata.title);
-    println!("  file_path: {}", metadata.file_path);
-    println!("  created_at: {}", metadata.created_at);
-    println!("  updated_at: {}", metadata.updated_at);
-
-    // 인덱스에 추가
-    let mut index = read_index()?;
-    index.notes.push(metadata.clone());
-    write_index(&index)?;
-
-    // DEBUG: Print the actual JSON being returned
-    let json = serde_json::to_string_pretty(&metadata).unwrap();
-    println!("Returning JSON:\n{}", json);
-
-    Ok(metadata)
 }
 
 // 메모 윈도우 열기
@@ -267,7 +223,7 @@ async fn open_note_window(app: tauri::AppHandle, note_id: String) -> Result<(), 
     }
 }
 
-// 파일 저장 커맨드: 지정된 경로에 내용을 저장합니다.
+// 파일 저장 커맨드
 #[tauri::command]
 fn save_note(path: String, content: String) -> Result<String, String> {
     fs::write(&path, &content).map_err(|e| e.to_string())?;
@@ -282,30 +238,6 @@ fn load_note_content(id: String) -> Result<String, String> {
     
     let content = fs::read_to_string(&note.file_path).map_err(|e| e.to_string())?;
     Ok(content)
-}
-
-// 윈도우 '항상 위에 표시' 설정 변경 커맨드
-#[tauri::command]
-fn set_always_on_top(window: tauri::Window, enabled: bool) -> Result<(), String> {
-    window
-        .set_always_on_top(enabled)
-        .map_err(|e| e.to_string())?;
-    Ok(())
-}
-
-// 윈도우 닫기 커맨드
-// 윈도우 닫기 커맨드
-#[tauri::command]
-fn close_window(window: tauri::Window) -> Result<(), String> {
-    window.close().map_err(|e| e.to_string())?;
-    Ok(())
-}
-
-// 윈도우 최소화 커맨드
-#[tauri::command]
-fn minimize_window(window: tauri::Window) -> Result<(), String> {
-    window.minimize().map_err(|e| e.to_string())?;
-    Ok(())
 }
 
 // 파일 다이얼로그를 통한 저장 커맨드
@@ -331,10 +263,43 @@ async fn save_note_with_dialog(app: tauri::AppHandle, content: String) -> Result
     }
 }
 
+// 윈도우 '항상 위에 표시' 설정 변경 커맨드
+#[tauri::command]
+fn set_always_on_top(window: tauri::Window, enabled: bool) -> Result<(), String> {
+    window
+        .set_always_on_top(enabled)
+        .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+// 윈도우 닫기 커맨드
+#[tauri::command]
+fn close_window(window: tauri::Window) -> Result<(), String> {
+    window.close().map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+// 윈도우 최소화 커맨드
+#[tauri::command]
+fn minimize_window(window: tauri::Window) -> Result<(), String> {
+    window.minimize().map_err(|e| e.to_string())?;
+    Ok(())
+}
+
 // 프론트엔드 로그 출력용 커맨드
 #[tauri::command]
 fn frontend_log(message: String) {
     println!("[FRONTEND]: {}", message);
+}
+
+// 메인 윈도우 열기/포커스 커맨드
+#[tauri::command]
+fn open_main_window(app: tauri::AppHandle) -> Result<(), String> {
+    if let Some(window) = app.get_webview_window("main") {
+        window.show().map_err(|e| e.to_string())?;
+        window.set_focus().map_err(|e| e.to_string())?;
+    }
+    Ok(())
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -345,11 +310,11 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             greet,
             get_notes_list,
-            create_new_note,
             generate_new_note_id,
             register_note,
-            show_context_menu, // Add this
+            show_context_menu,
             open_note_window,
+            open_main_window,
             save_note,
             load_note_content,
             save_note_with_dialog,

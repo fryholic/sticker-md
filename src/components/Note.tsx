@@ -4,6 +4,8 @@ import remarkGfm from 'remark-gfm';
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import { NotesIndex } from '../types/note';
+import { TitleBar } from './TitleBar';
+import { Bold, Italic, Underline, Strikethrough, Image as ImageIcon, Eye, Pencil } from 'lucide-react';
 
 interface NoteProps {
     noteId?: string | null;
@@ -16,12 +18,14 @@ export const Note = ({ noteId }: NoteProps) => {
     const [content, setContent] = useState<string>('');
     // 배경색 상태 관리
     const [bgColor, setBgColor] = useState<string>('#FFF7D1');
-    // 항상 위에 표시 상태 관리
-    const [isAlwaysOnTop, setIsAlwaysOnTop] = useState<boolean>(true);
+    // 항상 위에 표시 상태 관리 (초기값 false로 변경)
+    const [isAlwaysOnTop, setIsAlwaysOnTop] = useState<boolean>(false);
     // 저장되지 않은 변경사항 상태 관리
     const [isDirty, setIsDirty] = useState<boolean>(false);
     // 파일 경로 상태 관리
     const [filePath, setFilePath] = useState<string | null>(null);
+    // 텍스트 영역 Ref
+    const textareaRef = React.useRef<HTMLTextAreaElement>(null);
 
     // 메뉴 이벤트 리스너
     useEffect(() => {
@@ -36,6 +40,7 @@ export const Note = ({ noteId }: NoteProps) => {
                 // 상태 업데이트 함수형으로 처리하여 최신 상태 보장
                 setIsAlwaysOnTop(prev => {
                     const newState = !prev;
+                    console.log(`Toggling Always on Top: ${prev} -> ${newState}`);
                     invoke('set_always_on_top', { enabled: newState }).catch(console.error);
                     return newState;
                 });
@@ -115,6 +120,55 @@ export const Note = ({ noteId }: NoteProps) => {
         }
     };
 
+    // 윈도우 닫기 핸들러
+    const handleClose = async () => {
+        try {
+            await invoke('close_window');
+        } catch (error) {
+            console.error('Failed to close window:', error);
+        }
+    };
+
+    // 윈도우 최소화 핸들러
+    const handleMinimize = async () => {
+        try {
+            await invoke('minimize_window');
+        } catch (error) {
+            console.error('Failed to minimize window:', error);
+        }
+    };
+
+    // 메인 윈도우 열기 핸들러
+    const handleOpenMain = async () => {
+        try {
+            await invoke('open_main_window');
+        } catch (error) {
+            console.error('Failed to open main window:', error);
+        }
+    };
+
+    // 텍스트 포맷팅 핸들러
+    const insertFormat = (startTag: string, endTag: string = startTag) => {
+        if (!textareaRef.current) return;
+
+        const textarea = textareaRef.current;
+        const start = textarea.selectionStart;
+        const end = textarea.selectionEnd;
+        const text = textarea.value;
+        const selectedText = text.substring(start, end);
+
+        const newText = text.substring(0, start) + startTag + selectedText + endTag + text.substring(end);
+        
+        // React state update
+        handleContentChange(newText);
+
+        // Restore selection/cursor
+        setTimeout(() => {
+            textarea.focus();
+            textarea.setSelectionRange(start + startTag.length, end + startTag.length);
+        }, 0);
+    };
+
     // 우클릭 핸들러 (Native Menu)
     const handleContextMenu = async (e: React.MouseEvent) => {
         e.preventDefault();
@@ -127,44 +181,67 @@ export const Note = ({ noteId }: NoteProps) => {
 
     return (
         <div
-            className="h-full w-full p-4 flex flex-col relative transition-colors duration-300"
+            className="h-full w-full flex flex-col relative transition-colors duration-300"
             style={{ backgroundColor: bgColor }}
             onContextMenu={handleContextMenu}
         >
-            {mode === 'edit' ? (
-                // 에디터 모드: 텍스트 입력 영역
-                <textarea
-                    className="w-full h-full bg-transparent resize-none outline-none font-sans text-gray-800 placeholder-gray-400 leading-relaxed"
-                    placeholder="# Write your note here..."
-                    autoFocus
-                    value={content}
-                    onChange={(e) => handleContentChange(e.target.value)}
-                />
-            ) : (
-                // 미리보기 모드: 마크다운 렌더링
-                <div className="w-full h-full overflow-auto prose prose-sm max-w-none prose-headings:font-semibold prose-p:text-gray-700 prose-a:text-blue-600 prose-strong:text-gray-900">
-                    <ReactMarkdown remarkPlugins={[remarkGfm]}>{content}</ReactMarkdown>
-                </div>
-            )}
+            <TitleBar 
+                onClose={handleClose} 
+                onMinimize={handleMinimize} 
+                onOpenMain={handleOpenMain}
+                onSave={handleSave}
+            />
 
-            {/* 하단 컨트롤 버튼 영역 */}
-            <div className="absolute bottom-4 right-4 flex gap-2">
-                <button
-                    onClick={handleSave}
-                    className={`px-3 py-1.5 rounded-md transition-all duration-200 font-medium text-sm ${isDirty
-                        ? 'bg-blue-500 text-white hover:bg-blue-600 shadow-md hover:shadow-lg'
-                        : 'bg-white/70 hover:bg-white/90 text-gray-700 shadow-sm'
-                        }`}
-                    aria-label="Save"
-                >
-                    Save
-                </button>
+            <div className="flex-grow overflow-hidden relative mt-8 mb-10 mx-4">
+                {mode === 'edit' ? (
+                    // 에디터 모드: 텍스트 입력 영역
+                    <textarea
+                        ref={textareaRef}
+                        className="w-full h-full bg-transparent resize-none outline-none font-sans text-gray-800 placeholder-gray-400 leading-relaxed"
+                        placeholder="# Write your note here..."
+                        autoFocus
+                        value={content}
+                        onChange={(e) => handleContentChange(e.target.value)}
+                    />
+                ) : (
+                    // 미리보기 모드: 마크다운 렌더링
+                    <div className="w-full h-full overflow-auto prose prose-sm max-w-none prose-headings:font-semibold prose-p:text-gray-700 prose-a:text-blue-600 prose-strong:text-gray-900">
+                        <ReactMarkdown remarkPlugins={[remarkGfm]}>{content}</ReactMarkdown>
+                    </div>
+                )}
+            </div>
+
+            {/* 하단 툴바 (편집 모드일 때만 표시) */}
+            <div className="absolute bottom-0 left-0 right-0 h-10 px-4 flex items-center justify-between bg-black/5 backdrop-blur-sm opacity-0 hover:opacity-100 transition-opacity duration-200">
+                {mode === 'edit' ? (
+                    <div className="flex gap-1">
+                        <button onClick={() => insertFormat('**')} className="p-1.5 hover:bg-black/10 rounded text-gray-700" title="Bold">
+                            <Bold size={16} />
+                        </button>
+                        <button onClick={() => insertFormat('*')} className="p-1.5 hover:bg-black/10 rounded text-gray-700" title="Italic">
+                            <Italic size={16} />
+                        </button>
+                        <button onClick={() => insertFormat('<u>', '</u>')} className="p-1.5 hover:bg-black/10 rounded text-gray-700" title="Underline">
+                            <Underline size={16} />
+                        </button>
+                        <button onClick={() => insertFormat('~~')} className="p-1.5 hover:bg-black/10 rounded text-gray-700" title="Strikethrough">
+                            <Strikethrough size={16} />
+                        </button>
+                        <button onClick={() => insertFormat('![](', ')')} className="p-1.5 hover:bg-black/10 rounded text-gray-700" title="Image">
+                            <ImageIcon size={16} />
+                        </button>
+                    </div>
+                ) : (
+                    <div /> /* Spacer */
+                )}
+
+                {/* 모드 전환 토글 */}
                 <button
                     onClick={() => setMode(mode === 'edit' ? 'preview' : 'edit')}
-                    className="px-3 py-1.5 bg-white/70 hover:bg-white/90 text-gray-700 rounded-md shadow-sm hover:shadow-md transition-all duration-200 font-medium text-sm"
-                    aria-label={mode === 'edit' ? 'Preview' : 'Edit'}
+                    className="p-1.5 hover:bg-black/10 rounded text-gray-700 flex items-center gap-1"
+                    title={mode === 'edit' ? 'Switch to Preview' : 'Switch to Edit'}
                 >
-                    {mode === 'edit' ? 'Preview' : 'Edit'}
+                    {mode === 'edit' ? <Eye size={16} /> : <Pencil size={16} />}
                 </button>
             </div>
         </div>

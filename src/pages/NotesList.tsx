@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { getCurrentWindow } from '@tauri-apps/api/window';
+import { listen } from '@tauri-apps/api/event';
 import type { NotesIndex, NoteMetadata } from '../types/note';
 
 export const NotesList: React.FC = () => {
@@ -18,6 +19,20 @@ export const NotesList: React.FC = () => {
             setLoading(false);
         }
     };
+
+    // 이벤트 리스너 설정
+    useEffect(() => {
+        loadNotes();
+
+        const unlistenPromise = listen('refresh-notes-list', () => {
+            console.log('Refreshing notes list...');
+            loadNotes();
+        });
+
+        return () => {
+            unlistenPromise.then(unlisten => unlisten());
+        };
+    }, []);
 
     // 새 메모 생성
     const handleCreateNote = async () => {
@@ -63,9 +78,9 @@ export const NotesList: React.FC = () => {
     };
 
     // useEffect to load notes on mount
-    useEffect(() => {
-        loadNotes();
-    }, []);
+    // useEffect(() => {
+    //     loadNotes();
+    // }, []);
 
     // 윈도우 닫기
     const handleClose = async () => {

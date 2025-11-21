@@ -83,7 +83,6 @@ function App() {
   if (isNoteWindow) {
     return (
       <div className="h-screen w-screen relative">
-        <TitleBar onClose={handleClose} onMinimize={handleMinimize} />
         <Note noteId={noteId} />
       </div>
     );
