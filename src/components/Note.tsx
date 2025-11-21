@@ -1,8 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import rehypeRaw from 'rehype-raw';
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
+import { open } from '@tauri-apps/plugin-dialog';
+import { convertFileSrc } from '@tauri-apps/api/core';
 import { NotesIndex } from '../types/note';
 import { TitleBar } from './TitleBar';
 import { Bold, Italic, Underline, Strikethrough, Image as ImageIcon, Eye, Pencil } from 'lucide-react';
@@ -157,16 +160,74 @@ export const Note = ({ noteId }: NoteProps) => {
         const text = textarea.value;
         const selectedText = text.substring(start, end);
 
-        const newText = text.substring(0, start) + startTag + selectedText + endTag + text.substring(end);
+        let newText = '';
+        let newSelectionStart = start;
+        let newSelectionEnd = end;
+
+        // 1. 선택된 텍스트 자체가 태그로 감싸져 있는 경우 (예: **text**) -> 태그 제거
+        if (selectedText.startsWith(startTag) && selectedText.endsWith(endTag) && selectedText.length >= startTag.length + endTag.length) {
+             const unwrap = selectedText.substring(startTag.length, selectedText.length - endTag.length);
+             newText = text.substring(0, start) + unwrap + text.substring(end);
+             newSelectionEnd = start + unwrap.length;
+        } 
+        // 2. 선택된 텍스트 주변이 태그로 감싸져 있는 경우 (예: |**text**|) -> 태그 제거
+        else {
+             const before = text.substring(0, start);
+             const after = text.substring(end);
+             
+             if (before.endsWith(startTag) && after.startsWith(endTag)) {
+                 newText = text.substring(0, start - startTag.length) + selectedText + text.substring(end + endTag.length);
+                 newSelectionStart = start - startTag.length;
+                 newSelectionEnd = end - startTag.length;
+             } else {
+                 // 3. 태그 추가
+                 newText = text.substring(0, start) + startTag + selectedText + endTag + text.substring(end);
+                 newSelectionStart = start + startTag.length;
+                 newSelectionEnd = end + startTag.length;
+             }
+        }
         
-        // React state update
         handleContentChange(newText);
 
-        // Restore selection/cursor
         setTimeout(() => {
             textarea.focus();
-            textarea.setSelectionRange(start + startTag.length, end + startTag.length);
+            textarea.setSelectionRange(newSelectionStart, newSelectionEnd);
         }, 0);
+    };
+
+    // 이미지 삽입 핸들러
+    const handleImageInsert = async () => {
+        try {
+            const selected = await open({
+                multiple: false,
+                filters: [{
+                    name: 'Images',
+                    extensions: ['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg']
+                }]
+            });
+
+            if (selected && typeof selected === 'string') {
+                const assetUrl = convertFileSrc(selected);
+                const filename = selected.split(/[\\/]/).pop() || 'image';
+                const imageMarkdown = `![${filename}](${assetUrl})`;
+                
+                if (!textareaRef.current) return;
+                const textarea = textareaRef.current;
+                const start = textarea.selectionStart;
+                const end = textarea.selectionEnd;
+                const text = textarea.value;
+                
+                const newText = text.substring(0, start) + imageMarkdown + text.substring(end);
+                handleContentChange(newText);
+                
+                setTimeout(() => {
+                    textarea.focus();
+                    textarea.setSelectionRange(start + imageMarkdown.length, start + imageMarkdown.length);
+                }, 0);
+            }
+        } catch (err) {
+            console.error('Failed to insert image:', err);
+        }
     };
 
     // 우클릭 핸들러 (Native Menu)
@@ -206,7 +267,12 @@ export const Note = ({ noteId }: NoteProps) => {
                 ) : (
                     // 미리보기 모드: 마크다운 렌더링
                     <div className="w-full h-full overflow-auto prose prose-sm max-w-none prose-headings:font-semibold prose-p:text-gray-700 prose-a:text-blue-600 prose-strong:text-gray-900">
-                        <ReactMarkdown remarkPlugins={[remarkGfm]}>{content}</ReactMarkdown>
+                        <ReactMarkdown 
+                            remarkPlugins={[remarkGfm]}
+                            rehypePlugins={[rehypeRaw]}
+                        >
+                            {content}
+                        </ReactMarkdown>
                     </div>
                 )}
             </div>
@@ -305,7 +371,7 @@ export const Note = ({ noteId }: NoteProps) => {
                             </svg>
                         </button>
                         <button 
-                            onClick={() => insertFormat('![](', ')')} 
+                            onClick={handleImageInsert} 
                             className="hover:bg-black/10 rounded" 
                             title="Image"
                             style={{

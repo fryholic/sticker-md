@@ -1,9 +1,9 @@
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::PathBuf;
-use tauri::Manager;
+use tauri::menu::ContextMenu;
 use tauri::Emitter; // Emitter 트레이트 추가
-use tauri::menu::ContextMenu; // ContextMenu 트레이트 추가
+use tauri::Manager; // ContextMenu 트레이트 추가
 
 #[derive(Serialize, Deserialize, Clone)]
 struct NoteMetadata {
@@ -116,7 +116,12 @@ fn generate_new_note_id() -> String {
 
 // 노트 등록 커맨드 (저장 후 인덱스에 추가)
 #[tauri::command]
-fn register_note(app: tauri::AppHandle, id: String, title: String, file_path: String) -> Result<NoteMetadata, String> {
+fn register_note(
+    app: tauri::AppHandle,
+    id: String,
+    title: String,
+    file_path: String,
+) -> Result<NoteMetadata, String> {
     use std::time::SystemTime;
 
     // 현재 시간 (ISO 8601 형식)
@@ -141,7 +146,7 @@ fn register_note(app: tauri::AppHandle, id: String, title: String, file_path: St
     } else {
         index.notes.push(metadata.clone());
     }
-    
+
     write_index(&index)?;
 
     // 이벤트 발행: 노트 목록이 변경되었음을 알림
@@ -153,7 +158,7 @@ fn register_note(app: tauri::AppHandle, id: String, title: String, file_path: St
 // 컨텍스트 메뉴 표시 커맨드
 #[tauri::command]
 fn show_context_menu(app: tauri::AppHandle, window: tauri::Window) -> Result<(), String> {
-    use tauri::menu::{MenuBuilder, MenuItemBuilder, CheckMenuItemBuilder, SubmenuBuilder};
+    use tauri::menu::{CheckMenuItemBuilder, MenuBuilder, MenuItemBuilder, SubmenuBuilder};
 
     let is_always_on_top = window.is_always_on_top().unwrap_or(false);
     println!("Current always_on_top state: {}", is_always_on_top);
@@ -165,11 +170,36 @@ fn show_context_menu(app: tauri::AppHandle, window: tauri::Window) -> Result<(),
         .map_err(|e| e.to_string())?;
 
     let colors = SubmenuBuilder::new(&app, "Change Color")
-        .item(&MenuItemBuilder::new("Yellow").id("color_#FFF7D1").build(&app).map_err(|e| e.to_string())?)
-        .item(&MenuItemBuilder::new("Blue").id("color_#E0F7FA").build(&app).map_err(|e| e.to_string())?)
-        .item(&MenuItemBuilder::new("Green").id("color_#E8F5E9").build(&app).map_err(|e| e.to_string())?)
-        .item(&MenuItemBuilder::new("Pink").id("color_#FCE4EC").build(&app).map_err(|e| e.to_string())?)
-        .item(&MenuItemBuilder::new("Purple").id("color_#F3E5F5").build(&app).map_err(|e| e.to_string())?)
+        .item(
+            &MenuItemBuilder::new("Yellow")
+                .id("color_#FFF7D1")
+                .build(&app)
+                .map_err(|e| e.to_string())?,
+        )
+        .item(
+            &MenuItemBuilder::new("Blue")
+                .id("color_#E0F7FA")
+                .build(&app)
+                .map_err(|e| e.to_string())?,
+        )
+        .item(
+            &MenuItemBuilder::new("Green")
+                .id("color_#E8F5E9")
+                .build(&app)
+                .map_err(|e| e.to_string())?,
+        )
+        .item(
+            &MenuItemBuilder::new("Pink")
+                .id("color_#FCE4EC")
+                .build(&app)
+                .map_err(|e| e.to_string())?,
+        )
+        .item(
+            &MenuItemBuilder::new("Purple")
+                .id("color_#F3E5F5")
+                .build(&app)
+                .map_err(|e| e.to_string())?,
+        )
         .build()
         .map_err(|e| e.to_string())?;
 
@@ -199,15 +229,12 @@ async fn open_note_window(app: tauri::AppHandle, note_id: String) -> Result<(), 
 
     println!("Creating new window: {}", label);
 
-    let builder = tauri::WebviewWindowBuilder::new(
-        &app,
-        &label,
-        tauri::WebviewUrl::App("index.html".into()),
-    )
-    .title(&format!("Note"))
-    .inner_size(400.0, 400.0)
-    .decorations(false) // 테두리 없음
-    .transparent(false); // 투명도 없음 (일단)
+    let builder =
+        tauri::WebviewWindowBuilder::new(&app, &label, tauri::WebviewUrl::App("index.html".into()))
+            .title(&format!("Note"))
+            .inner_size(400.0, 400.0)
+            .decorations(false) // 테두리 없음
+            .transparent(false); // 투명도 없음 (일단)
 
     println!("Builder created, building window...");
 
@@ -234,8 +261,12 @@ fn save_note(path: String, content: String) -> Result<String, String> {
 #[tauri::command]
 fn load_note_content(id: String) -> Result<String, String> {
     let index = read_index()?;
-    let note = index.notes.iter().find(|n| n.id == id).ok_or("Note not found")?;
-    
+    let note = index
+        .notes
+        .iter()
+        .find(|n| n.id == id)
+        .ok_or("Note not found")?;
+
     let content = fs::read_to_string(&note.file_path).map_err(|e| e.to_string())?;
     Ok(content)
 }
@@ -305,6 +336,7 @@ fn open_main_window(app: tauri::AppHandle) -> Result<(), String> {
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .invoke_handler(tauri::generate_handler![

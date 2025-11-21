@@ -92,6 +92,15 @@ body {
   margin-bottom: 0.25em;
 }
 
+.prose strong {
+  font-weight: 600;
+  color: #111827;
+}
+
+.prose em {
+  font-style: italic !important;
+}
+
 /* Task lists */
 .prose input[type="checkbox"] {
   margin-right: 0.5em;
