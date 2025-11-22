@@ -4,7 +4,6 @@ import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
 import { invoke } from "@tauri-apps/api/core";
 import { NotesList } from "./pages/NotesList";
 import { Note } from "./components/Note";
-import { TitleBar } from "./components/TitleBar";
 
 function App() {
   // IMMEDIATE LOG - executes as soon as this component loads
@@ -53,24 +52,6 @@ function App() {
     checkWindowType();
   }, []);
 
-  // 윈도우 닫기 핸들러
-  const handleClose = async () => {
-    try {
-      await invoke('close_window');
-    } catch (error) {
-      console.error('Failed to close window:', error);
-    }
-  };
-
-  // 윈도우 최소화 핸들러
-  const handleMinimize = async () => {
-    try {
-      await invoke('minimize_window');
-    } catch (error) {
-      console.error('Failed to minimize window:', error);
-    }
-  };
-
   if (loading) {
     return (
       <div className="flex items-center justify-center h-screen">
@@ -79,7 +60,7 @@ function App() {
     );
   }
 
-  // Note 윈도우면 TitleBar + Note 컴포넌트
+  // Note 윈도우면 Note 컴포넌트 (TitleBar 포함)
   if (isNoteWindow) {
     return (
       <div className="h-screen w-screen relative">
