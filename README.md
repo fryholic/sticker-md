@@ -70,5 +70,3 @@ The executable will be located in `src-tauri/target/release/bundle/`.
   - `tauri.conf.json`: Tauri configuration file.
 
 ## License
-
-[MIT License](LICENSE)
