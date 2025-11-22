@@ -30,13 +30,66 @@ jobs:
       - name: install frontend dependencies
         run: npm install
 
-      - name: Build and Upload Release
-        uses: tauri-apps/tauri-action@v0
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      # 1. 빌드
+      - name: Build Tauri App
+        run: npm run tauri build
+
+      # 2. 파일 경로 및 이름 저장
+      - name: Find Artifacts
+        id: find-artifacts
+        shell: pwsh
+        run: |
+          $msi = Get-ChildItem "src-tauri/target/release/bundle/msi/*.msi" | Select-Object -First 1
+          $exe = Get-ChildItem "src-tauri/target/release/bundle/nsis/*.exe" | Select-Object -First 1
+          
+          echo "msi_path=$($msi.FullName)" >> $env:GITHUB_OUTPUT
+          echo "exe_path=$($exe.FullName)" >> $env:GITHUB_OUTPUT
+          echo "msi_name=$($msi.Name)" >> $env:GITHUB_OUTPUT
+          echo "exe_name=$($exe.Name)" >> $env:GITHUB_OUTPUT
+
+      # 3-1. MSI 서명 (결과물은 signed-msi 폴더에 저장)
+      - name: Sign MSI
+        uses: signpath/github-action-submit-signing-request@v2
         with:
-          tagName: ${{ github.ref_name }}
-          releaseName: 'App ${{ github.ref_name }}'
-          releaseBody: 'See the assets to download this version and install.'
-          releaseDraft: true
+          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+          organization-id: '<YOUR_ORG_ID>'
+          project-slug: 'stickermd'
+          signing-policy-slug: 'test-signing'
+          artifact-configuration-slug: 'stickermd-msi'
+          artifact-file: ${{ steps.find-artifacts.outputs.msi_path }}
+          wait-for-completion: true
+          output-artifact-directory: 'signed-msi'
+
+      # 3-2. EXE 서명 (결과물은 signed-exe 폴더에 저장)
+      - name: Sign EXE
+        uses: signpath/github-action-submit-signing-request@v2
+        with:
+          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+          organization-id: '<YOUR_ORG_ID>'
+          project-slug: 'stickermd'
+          signing-policy-slug: 'test-signing'
+          artifact-configuration-slug: 'stickermd-exe'
+          artifact-file: ${{ steps.find-artifacts.outputs.exe_path }}
+          wait-for-completion: true
+          output-artifact-directory: 'signed-exe'
+
+      # 4. 파일 이름 복구 및 릴리스 준비
+      - name: Prepare Release Assets
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path "final_assets"
+          
+          # 서명된 파일들은 임의의 이름일 수 있으므로, 원래 이름으로 변경하여 이동
+          Move-Item "signed-msi/*" "final_assets/${{ steps.find-artifacts.outputs.msi_name }}"
+          Move-Item "signed-exe/*" "final_assets/${{ steps.find-artifacts.outputs.exe_name }}"
+
+      # 5. GitHub Release 업로드
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        if: startsWith(github.ref, 'refs/tags/')
+        with:
+          files: final_assets/*
+          draft: true
           prerelease: false
+          name: 'App ${{ github.ref_name }}'
+          body: 'See the assets to download this version and install.'
