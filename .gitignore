@@ -14,6 +14,7 @@ dist-ssr
 
 doc
 .vscode
+misc
 
 # Editor directories and files
 .vscode/*
