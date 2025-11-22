@@ -52,8 +52,8 @@ jobs:
         uses: signpath/github-action-submit-signing-request@v2
         with:
           api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
-          organization-id: '<YOUR_ORG_ID>'
-          project-slug: 'stickermd'
+          organization-id: 'fryholic'
+          project-slug: 'stickermd-msi'
           signing-policy-slug: 'test-signing'
           artifact-configuration-slug: 'stickermd-msi'
           artifact-file: ${{ steps.find-artifacts.outputs.msi_path }}
@@ -65,8 +65,8 @@ jobs:
         uses: signpath/github-action-submit-signing-request@v2
         with:
           api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
-          organization-id: '<YOUR_ORG_ID>'
-          project-slug: 'stickermd'
+          organization-id: 'fryholic'
+          project-slug: 'stickermd-exe'
           signing-policy-slug: 'test-signing'
           artifact-configuration-slug: 'stickermd-exe'
           artifact-file: ${{ steps.find-artifacts.outputs.exe_path }}
