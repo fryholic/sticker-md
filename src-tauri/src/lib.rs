@@ -411,6 +411,63 @@ fn save_window_state(id: Option<String>, width: f64, height: f64) -> Result<(), 
     Ok(())
 }
 
+// 파일 열기 다이얼로그 및 등록 커맨드
+#[tauri::command]
+async fn open_file_with_dialog(app: tauri::AppHandle) -> Result<String, String> {
+    use std::time::SystemTime;
+    use tauri_plugin_dialog::{DialogExt, FilePath};
+
+    // 1. 파일 선택 다이얼로그
+    let file_path = app
+        .dialog()
+        .file()
+        .add_filter("Markdown", &["md", "markdown"])
+        .blocking_pick_file();
+
+    match file_path {
+        Some(FilePath::Path(path)) => {
+            let path_str = path.to_string_lossy().to_string();
+            let mut index = read_index()?;
+
+            // 2. 이미 등록된 파일인지 확인
+            if let Some(existing_note) = index.notes.iter().find(|n| n.file_path == path_str) {
+                println!("File already registered: {}", path_str);
+                return Ok(existing_note.id.clone());
+            }
+
+            // 3. 등록되지 않은 경우 새로 등록
+            println!("Registering new file: {}", path_str);
+            let new_id = uuid::Uuid::new_v4().to_string();
+
+            // 파일 내용 읽어서 제목 추출
+            let content = fs::read_to_string(&path).map_err(|e| e.to_string())?;
+            let title = extract_title(&content);
+
+            let now: chrono::DateTime<chrono::Utc> = SystemTime::now().into();
+            let now_str = now.to_rfc3339();
+
+            let new_note = NoteMetadata {
+                id: new_id.clone(),
+                title,
+                file_path: path_str,
+                created_at: now_str.clone(),
+                updated_at: now_str,
+                width: Some(400.0),
+                height: Some(400.0),
+            };
+
+            index.notes.push(new_note);
+            write_index(&index)?;
+
+            // 목록 갱신 이벤트 발행
+            let _ = app.emit("refresh-notes-list", ());
+
+            Ok(new_id)
+        }
+        _ => Err("No file selected".to_string()),
+    }
+}
+
 // 노트 삭제 커맨드
 #[tauri::command]
 fn delete_note(app: tauri::AppHandle, id: String) -> Result<(), String> {
@@ -468,7 +525,8 @@ pub fn run() {
             frontend_log,
             read_image_binary,
             save_window_state,
-            delete_note
+            delete_note,
+            open_file_with_dialog
         ])
         .setup(|app| {
             // 앱 시작 시 메인 윈도우 크기 복원
