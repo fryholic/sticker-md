@@ -106,9 +106,10 @@ fn extract_title(content: &str) -> String {
     if title.is_empty() {
         "Untitled Note".to_string()
     } else {
-        // 최대 50자로 제한
-        if title.len() > 50 {
-            format!("{}...", &title[..50])
+        // 최대 50자로 제한 (멀티바이트 문자 안전 처리)
+        if title.chars().count() > 50 {
+            let truncated: String = title.chars().take(50).collect();
+            format!("{}...", truncated)
         } else {
             title.to_string()
         }
@@ -300,7 +301,8 @@ fn load_note_content(id: String) -> Result<String, String> {
         .find(|n| n.id == id)
         .ok_or("Note not found")?;
 
-    let content = fs::read_to_string(&note.file_path).map_err(|e| e.to_string())?;
+    let content_bytes = fs::read(&note.file_path).map_err(|e| e.to_string())?;
+    let content = String::from_utf8_lossy(&content_bytes).to_string();
     Ok(content)
 }
 
@@ -411,10 +413,78 @@ fn save_window_state(id: Option<String>, width: f64, height: f64) -> Result<(), 
     Ok(())
 }
 
+fn log_to_file(msg: &str) {
+    use std::io::Write;
+    if let Ok(mut file) = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open("C:\\Users\\lee\\.gemini\\sticker_debug.log")
+    {
+        let _ = writeln!(file, "[{}] {}", chrono::Utc::now(), msg);
+    }
+}
+
+// 파일 경로로 열기 (CLI, Drag&Drop 공용)
+#[tauri::command]
+async fn open_file_from_path(app: tauri::AppHandle, path: String) -> Result<String, String> {
+    use std::time::SystemTime;
+
+    let path_str = path.clone();
+    let mut index = read_index()?;
+
+    // 1. 이미 등록된 파일인지 확인
+    if let Some(existing_note) = index.notes.iter().find(|n| n.file_path == path_str) {
+        log_to_file(&format!("File already registered: {}", path_str));
+
+        // 윈도우가 열려있는지 확인하고 포커스
+        let label = format!("note_{}", existing_note.id);
+        if let Some(window) = app.get_webview_window(&label) {
+            log_to_file(&format!("Window {} exists, focusing...", label));
+            let _ = window.set_focus();
+        } else {
+            log_to_file(&format!(
+                "Window {} not open, doing nothing (just registered).",
+                label
+            ));
+        }
+
+        return Ok(existing_note.id.clone());
+    }
+
+    // 2. 등록되지 않은 경우 새로 등록
+    log_to_file(&format!("Registering new file: {}", path_str));
+    let new_id = uuid::Uuid::new_v4().to_string();
+
+    // 파일 내용 읽어서 제목 추출 (lossy utf8 처리)
+    let content_bytes = fs::read(&path).map_err(|e| e.to_string())?;
+    let content = String::from_utf8_lossy(&content_bytes).to_string();
+    let title = extract_title(&content);
+
+    let now: chrono::DateTime<chrono::Utc> = SystemTime::now().into();
+    let now_str = now.to_rfc3339();
+
+    let new_note = NoteMetadata {
+        id: new_id.clone(),
+        title,
+        file_path: path_str,
+        created_at: now_str.clone(),
+        updated_at: now_str,
+        width: Some(400.0),
+        height: Some(400.0),
+    };
+
+    index.notes.push(new_note);
+    write_index(&index)?;
+
+    // 목록 갱신 이벤트 발행
+    let _ = app.emit("refresh-notes-list", ());
+
+    Ok(new_id)
+}
+
 // 파일 열기 다이얼로그 및 등록 커맨드
 #[tauri::command]
 async fn open_file_with_dialog(app: tauri::AppHandle) -> Result<String, String> {
-    use std::time::SystemTime;
     use tauri_plugin_dialog::{DialogExt, FilePath};
 
     // 1. 파일 선택 다이얼로그
@@ -427,42 +497,8 @@ async fn open_file_with_dialog(app: tauri::AppHandle) -> Result<String, String> 
     match file_path {
         Some(FilePath::Path(path)) => {
             let path_str = path.to_string_lossy().to_string();
-            let mut index = read_index()?;
-
-            // 2. 이미 등록된 파일인지 확인
-            if let Some(existing_note) = index.notes.iter().find(|n| n.file_path == path_str) {
-                println!("File already registered: {}", path_str);
-                return Ok(existing_note.id.clone());
-            }
-
-            // 3. 등록되지 않은 경우 새로 등록
-            println!("Registering new file: {}", path_str);
-            let new_id = uuid::Uuid::new_v4().to_string();
-
-            // 파일 내용 읽어서 제목 추출
-            let content = fs::read_to_string(&path).map_err(|e| e.to_string())?;
-            let title = extract_title(&content);
-
-            let now: chrono::DateTime<chrono::Utc> = SystemTime::now().into();
-            let now_str = now.to_rfc3339();
-
-            let new_note = NoteMetadata {
-                id: new_id.clone(),
-                title,
-                file_path: path_str,
-                created_at: now_str.clone(),
-                updated_at: now_str,
-                width: Some(400.0),
-                height: Some(400.0),
-            };
-
-            index.notes.push(new_note);
-            write_index(&index)?;
-
-            // 목록 갱신 이벤트 발행
-            let _ = app.emit("refresh-notes-list", ());
-
-            Ok(new_id)
+            // 재사용 가능한 로직 호출
+            open_file_from_path(app, path_str).await
         }
         _ => Err("No file selected".to_string()),
     }
@@ -508,6 +544,33 @@ pub fn run() {
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_single_instance::init(|app, args, _cwd| {
+            log_to_file(&format!("Single instance callback: {:?}", args));
+            let _ = app
+                .get_webview_window("main")
+                .expect("no main window")
+                .set_focus();
+
+            if args.len() > 1 {
+                // println!("Single instance args: {:?}", args);
+                for arg in args.iter().skip(1) {
+                    let path = std::path::Path::new(arg);
+                    if path.exists() && path.is_file() {
+                        if let Some(ext) = path.extension() {
+                            if ext == "md" || ext == "markdown" {
+                                log_to_file(&format!("Opening file from single instance: {}", arg));
+                                let app_handle = app.clone();
+                                let arg_path = arg.clone();
+                                tauri::async_runtime::spawn(async move {
+                                    let _ = open_file_from_path(app_handle, arg_path).await;
+                                });
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+        }))
         .invoke_handler(tauri::generate_handler![
             greet,
             get_notes_list,
@@ -526,7 +589,8 @@ pub fn run() {
             read_image_binary,
             save_window_state,
             delete_note,
-            open_file_with_dialog
+            open_file_with_dialog,
+            open_file_from_path
         ])
         .setup(|app| {
             // 앱 시작 시 메인 윈도우 크기 복원
@@ -544,6 +608,59 @@ pub fn run() {
                     }));
                 }
             }
+
+            // CLI 인자 처리 (파일 연결)
+            let args: Vec<String> = std::env::args().collect();
+            log_to_file(&format!("Setup args: {:?}", args));
+
+            if let Ok(cwd) = std::env::current_dir() {
+                log_to_file(&format!("CWD: {:?}", cwd));
+            }
+
+            if args.len() > 1 {
+                // 첫 번째 인자는 실행 파일 경로이므로 두 번째부터 확인
+                for arg in args.iter().skip(1) {
+                    let path = std::path::Path::new(arg);
+                    let mut abs_path = if path.is_absolute() {
+                        path.to_path_buf()
+                    } else {
+                        std::env::current_dir().unwrap_or_default().join(path)
+                    };
+
+                    // 개발 환경 지원: src-tauri에서 실행 시 상위 디렉토리 확인
+                    if !abs_path.exists() {
+                        if let Ok(cwd) = std::env::current_dir() {
+                            if let Some(parent) = cwd.parent() {
+                                let parent_path = parent.join(path);
+                                if parent_path.exists() {
+                                    abs_path = parent_path;
+                                }
+                            }
+                        }
+                    }
+
+                    log_to_file(&format!(
+                        "Checking path: {:?} (exists: {})",
+                        abs_path,
+                        abs_path.exists()
+                    ));
+
+                    if abs_path.exists() && abs_path.is_file() {
+                        if let Some(ext) = abs_path.extension() {
+                            if ext == "md" || ext == "markdown" {
+                                log_to_file(&format!("Opening file from args: {:?}", abs_path));
+                                let app_handle = app.handle().clone();
+                                let arg_path = abs_path.to_string_lossy().to_string();
+                                tauri::async_runtime::spawn(async move {
+                                    let _ = open_file_from_path(app_handle, arg_path).await;
+                                });
+                                break; // 첫 번째 유효한 파일만 처리
+                            }
+                        }
+                    }
+                }
+            }
+
             Ok(())
         })
         .on_menu_event(|app, event| {
@@ -584,5 +701,19 @@ mod tests {
 
         // 테스트 후 파일 정리
         fs::remove_file(path).unwrap();
+    }
+    #[test]
+    fn test_extract_title_korean() {
+        let content = "# 한글 제목 테스트입니다. 이 제목은 50자가 넘지 않지만 멀티바이트 처리를 테스트합니다.";
+        let title = extract_title(content);
+        assert_eq!(
+            title,
+            "한글 제목 테스트입니다. 이 제목은 50자가 넘지 않지만 멀티바이트 처리를 테스트합니다."
+        );
+
+        let long_content = "# ".to_string() + &"가".repeat(100);
+        let title = extract_title(&long_content);
+        assert_eq!(title.chars().count(), 53); // 50 chars + "..."
+        assert!(title.ends_with("..."));
     }
 }

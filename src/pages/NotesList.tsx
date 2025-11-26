@@ -35,8 +35,25 @@ export const NotesList: React.FC = () => {
             loadNotes();
         });
 
+        const unlistenFileDropPromise = listen('tauri://drag-drop', (event) => {
+            const payload = event.payload as { paths: string[], position: { x: number, y: number } };
+            if (payload && payload.paths && payload.paths.length > 0) {
+                console.log('File dropped:', payload.paths);
+                payload.paths.forEach(async (path) => {
+                    if (path.toLowerCase().endsWith('.md') || path.toLowerCase().endsWith('.markdown')) {
+                        try {
+                            await invoke('open_file_from_path', { path });
+                        } catch (e) {
+                            console.error('Failed to open dropped file:', e);
+                        }
+                    }
+                });
+            }
+        });
+
         return () => {
             unlistenPromise.then(unlisten => unlisten());
+            unlistenFileDropPromise.then(unlisten => unlisten());
         };
     }, []);
 
