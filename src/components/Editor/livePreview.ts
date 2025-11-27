@@ -15,9 +15,9 @@ const hideDecoration = Decoration.replace({});
 const boldDecoration = Decoration.mark({ class: "cm-bold" });
 const italicDecoration = Decoration.mark({ class: "cm-italic" });
 const strikethroughDecoration = Decoration.mark({ class: "cm-strikethrough" });
+const inlineCodeDecoration = Decoration.mark({ class: "cm-inline-code" });
 const headerDecoration = (level: number) => Decoration.mark({ class: `cm-header-${level}` });
 const blockquoteDecoration = Decoration.line({ class: "cm-blockquote" });
-const codeBlockDecoration = Decoration.line({ class: "cm-codeblock" });
 const tableDecoration = Decoration.line({ class: "cm-table" });
 
 // Widget for Checkbox
@@ -235,16 +235,33 @@ const livePreviewPlugin = ViewPlugin.fromClass(
                         // Fenced Code (```)
                         else if (typeName === "FencedCode") {
                             if (!isCursorInside(selection, node.from, node.to)) {
+                                // Calculate indentation of the opening line
+                                const startLineObj = view.state.doc.lineAt(node.from);
+                                const startLineText = startLineObj.text;
+                                const indentMatch = startLineText.match(/^([ \t]*)/);
+                                const indent = indentMatch ? indentMatch[1].length : 0;
+                                const indentStyle = `--indent: ${indent}ch`;
+
                                 // Apply background style
-                                for (let i = view.state.doc.lineAt(node.from).number; i <= view.state.doc.lineAt(node.to).number; i++) {
+                                const startLine = view.state.doc.lineAt(node.from).number;
+                                const endLine = view.state.doc.lineAt(node.to).number;
+
+                                for (let i = startLine; i <= endLine; i++) {
                                     const line = view.state.doc.line(i);
-                                    widgets.push(codeBlockDecoration.range(line.from, line.from));
+                                    let className = "cm-codeblock";
+                                    if (i === startLine) className += " cm-codeblock-first";
+                                    if (i === endLine) className += " cm-codeblock-last";
+
+                                    widgets.push(Decoration.line({
+                                        class: className,
+                                        attributes: { style: indentStyle }
+                                    }).range(line.from, line.from));
                                 }
 
                                 // Hide the backticks
                                 const text = view.state.sliceDoc(node.from, node.to);
-                                const openFenceMatch = text.match(/^`{3,}.*/);
-                                const closeFenceMatch = text.match(/\n`{3,}[ \t]*$/);
+                                const openFenceMatch = text.match(/^[ \t]*`{3,}.*/);
+                                const closeFenceMatch = text.match(/\n[ \t]*`{3,}[ \t]*$/);
 
                                 if (openFenceMatch) {
                                     widgets.push(hideDecoration.range(node.from, node.from + openFenceMatch[0].length));
@@ -253,6 +270,21 @@ const livePreviewPlugin = ViewPlugin.fromClass(
                                     // closeFenceMatch includes the newline, be careful with range
                                     const closeStart = node.from + closeFenceMatch.index! + 1; // +1 for newline
                                     widgets.push(hideDecoration.range(closeStart, node.to));
+                                }
+                            }
+                        }
+                        // Inline Code (`code`)
+                        else if (typeName === "InlineCode") {
+                            if (!isCursorInside(selection, node.from, node.to)) {
+                                const text = view.state.sliceDoc(node.from, node.to);
+                                const match = text.match(/^(`+)([\s\S]*?)(`+)$/);
+                                if (match) {
+                                    const startTicks = match[1].length;
+                                    const endTicks = match[3].length;
+
+                                    widgets.push(hideDecoration.range(node.from, node.from + startTicks));
+                                    widgets.push(hideDecoration.range(node.to - endTicks, node.to));
+                                    widgets.push(inlineCodeDecoration.range(node.from + startTicks, node.to - endTicks));
                                 }
                             }
                         }
@@ -312,7 +344,25 @@ export const livePreview = [
         ".cm-header-5": { fontSize: "1em", fontWeight: "bold" },
         ".cm-header-6": { fontSize: "1em", fontWeight: "bold", color: "#6B7280" },
         ".cm-blockquote": { borderLeft: "4px solid #E5E7EB", paddingLeft: "1em", color: "#6B7280" },
-        ".cm-codeblock": { backgroundColor: "#F3F4F6", borderRadius: "0.25em", fontFamily: "monospace" },
+        ".cm-codeblock": { position: "relative", fontFamily: "monospace" },
+        ".cm-codeblock::before": {
+            content: '""',
+            position: "absolute",
+            top: "0",
+            bottom: "0",
+            left: "var(--indent, 0)",
+            right: "0",
+            backgroundColor: "#F3F4F6",
+            zIndex: "-1",
+        },
+        ".cm-codeblock-first::before": { borderTopLeftRadius: "0.25em", borderTopRightRadius: "0.25em" },
+        ".cm-codeblock-last::before": { borderBottomLeftRadius: "0.25em", borderBottomRightRadius: "0.25em" },
+        ".cm-inline-code": {
+            backgroundColor: "#F3F4F6",
+            borderRadius: "0.25em",
+            fontFamily: "monospace",
+            padding: "0.1em 0.3em",
+        },
         ".cm-table": { /* Add table specific styling here if needed, e.g., border-collapse */ }
     }),
 ];

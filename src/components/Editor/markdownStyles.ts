@@ -9,12 +9,12 @@ export const markdownHighlightStyle = HighlightStyle.define([
     { tag: tags.heading2, fontSize: '1.25em' },
 
     // Emphasis
-    { tag: tags.strong, fontWeight: 'bold', color: '#7C3AED' }, // violet-600 (Accent)
+    { tag: tags.strong, fontWeight: 'bold', color: '#111827' }, // Explicitly set to gray-900 to avoid inheritance
     { tag: tags.emphasis, fontStyle: 'italic' },
     { tag: tags.strikethrough, textDecoration: 'line-through', color: '#6B7280' }, // gray-500
 
     // Lists
-    { tag: tags.list, color: '#7C3AED' }, // violet-600 (Bullets)
+    { tag: tags.list }, // Removed violet-600 color to prevent whole line coloring
 
     // Blockquotes
     { tag: tags.quote, fontStyle: 'italic', color: '#6B7280' }, // gray-500
