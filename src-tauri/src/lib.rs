@@ -360,12 +360,80 @@ fn frontend_log(message: String) {
 
 // 메인 윈도우 열기/포커스 커맨드
 #[tauri::command]
-fn open_main_window(app: tauri::AppHandle) -> Result<(), String> {
-    if let Some(window) = app.get_webview_window("main") {
-        window.show().map_err(|e| e.to_string())?;
-        window.set_focus().map_err(|e| e.to_string())?;
+async fn open_main_window(app: tauri::AppHandle) -> Result<(), String> {
+    log_to_file("open_main_window: Called");
+
+    // 1. 모든 윈도우를 순회하며 'main' 관련 윈도우 확인
+    let windows = app.webview_windows();
+    for (label, window) in windows {
+        if label == "main" || label.starts_with("main_window") {
+            log_to_file(&format!(
+                "open_main_window: Found existing window '{}'",
+                label
+            ));
+            window.show().map_err(|e| e.to_string())?;
+            window.set_focus().map_err(|e| e.to_string())?;
+            return Ok(());
+        }
     }
-    Ok(())
+
+    // 2. 없으면 새로 생성 (유니크 라벨 사용)
+    let new_label = format!("main_window_{}", uuid::Uuid::new_v4());
+    log_to_file(&format!(
+        "open_main_window: Creating new window '{}'...",
+        new_label
+    ));
+
+    // 저장된 크기 불러오기
+    let index = read_index()?;
+    let (width, height) = if let Some(size) = index.main_window {
+        (size.width, size.height)
+    } else {
+        (600.0, 800.0)
+    };
+
+    log_to_file(&format!(
+        "open_main_window: Target size {}x{}",
+        width, height
+    ));
+
+    let builder = tauri::WebviewWindowBuilder::new(
+        &app,
+        &new_label,
+        tauri::WebviewUrl::App("".into()), // 루트 경로 사용
+    )
+    .title("Sticky Notes")
+    .inner_size(width, height)
+    .min_inner_size(400.0, 200.0)
+    .decorations(false)
+    .transparent(false)
+    .resizable(true);
+
+    match builder.build() {
+        Ok(window) => {
+            log_to_file("open_main_window: Window built successfully");
+            if let Err(e) = window.center() {
+                log_to_file(&format!("open_main_window: Failed to center - {}", e));
+            }
+
+            if let Err(e) = window.show() {
+                log_to_file(&format!("open_main_window: Failed to show - {}", e));
+                return Err(e.to_string());
+            }
+
+            if let Err(e) = window.set_focus() {
+                log_to_file(&format!("open_main_window: Failed to set focus - {}", e));
+                return Err(e.to_string());
+            }
+
+            log_to_file("open_main_window: Window setup complete");
+            Ok(())
+        }
+        Err(e) => {
+            log_to_file(&format!("open_main_window: Failed to build window - {}", e));
+            Err(e.to_string())
+        }
+    }
 }
 
 // 이미지 파일 바이너리 읽기
@@ -546,10 +614,31 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_single_instance::init(|app, args, _cwd| {
             log_to_file(&format!("Single instance callback: {:?}", args));
-            let _ = app
-                .get_webview_window("main")
-                .expect("no main window")
-                .set_focus();
+
+            let mut window_found = false;
+            let windows = app.webview_windows();
+
+            // 모든 윈도우를 순회하며 메인 윈도우 찾기
+            for (label, window) in windows {
+                if label == "main" || label.starts_with("main_window") {
+                    log_to_file(&format!(
+                        "Single instance: Found existing window '{}'",
+                        label
+                    ));
+                    let _ = window.set_focus();
+                    window_found = true;
+                    break;
+                }
+            }
+
+            // 윈도우가 없으면 새로 생성 (비동기 호출)
+            if !window_found {
+                log_to_file("Single instance: No main window found, creating new one...");
+                let app_handle = app.clone();
+                tauri::async_runtime::spawn(async move {
+                    let _ = open_main_window(app_handle).await;
+                });
+            }
 
             if args.len() > 1 {
                 // println!("Single instance args: {:?}", args);
