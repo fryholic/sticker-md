@@ -20,13 +20,27 @@
     {
       "identifier": "fs:allow-read",
       "allow": [
-        { "path": "$HOME/**" },
-        { "path": "$DESKTOP/**" },
-        { "path": "$DOWNLOADS/**" },
-        { "path": "$DOCUMENTS/**" },
-        { "path": "$PICTURES/**" },
-        { "path": "C:\\Users\\**" },
-        { "path": "C:/Users/**" }
+        {
+          "path": "$HOME/**"
+        },
+        {
+          "path": "$DESKTOP/**"
+        },
+        {
+          "path": "$DOWNLOADS/**"
+        },
+        {
+          "path": "$DOCUMENTS/**"
+        },
+        {
+          "path": "$PICTURES/**"
+        },
+        {
+          "path": "C:\\Users\\**"
+        },
+        {
+          "path": "C:/Users/**"
+        }
       ]
     }
   ]

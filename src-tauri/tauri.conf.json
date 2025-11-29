@@ -14,8 +14,8 @@
       {
         "label": "main",
         "title": "Sticky Notes",
-        "width": 800,
-        "height": 600,
+        "width": 600,
+        "height": 800,
         "decorations": false,
         "transparent": false,
         "alwaysOnTop": false,
@@ -45,6 +45,17 @@
     ],
     "resources": [
       "../third_party_licenses.txt"
+    ],
+    "fileAssociations": [
+      {
+        "ext": [
+          "md",
+          "markdown"
+        ],
+        "name": "Markdown File",
+        "description": "Markdown File",
+        "role": "Editor"
+      }
     ]
   }
 }

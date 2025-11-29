@@ -106,9 +106,10 @@ fn extract_title(content: &str) -> String {
     if title.is_empty() {
         "Untitled Note".to_string()
     } else {
-        // 최대 50자로 제한
-        if title.len() > 50 {
-            format!("{}...", &title[..50])
+        // 최대 50자로 제한 (멀티바이트 문자 안전 처리)
+        if title.chars().count() > 50 {
+            let truncated: String = title.chars().take(50).collect();
+            format!("{}...", truncated)
         } else {
             title.to_string()
         }
@@ -300,7 +301,8 @@ fn load_note_content(id: String) -> Result<String, String> {
         .find(|n| n.id == id)
         .ok_or("Note not found")?;
 
-    let content = fs::read_to_string(&note.file_path).map_err(|e| e.to_string())?;
+    let content_bytes = fs::read(&note.file_path).map_err(|e| e.to_string())?;
+    let content = String::from_utf8_lossy(&content_bytes).to_string();
     Ok(content)
 }
 
@@ -358,12 +360,80 @@ fn frontend_log(message: String) {
 
 // 메인 윈도우 열기/포커스 커맨드
 #[tauri::command]
-fn open_main_window(app: tauri::AppHandle) -> Result<(), String> {
-    if let Some(window) = app.get_webview_window("main") {
-        window.show().map_err(|e| e.to_string())?;
-        window.set_focus().map_err(|e| e.to_string())?;
+async fn open_main_window(app: tauri::AppHandle) -> Result<(), String> {
+    log_to_file("open_main_window: Called");
+
+    // 1. 모든 윈도우를 순회하며 'main' 관련 윈도우 확인
+    let windows = app.webview_windows();
+    for (label, window) in windows {
+        if label == "main" || label.starts_with("main_window") {
+            log_to_file(&format!(
+                "open_main_window: Found existing window '{}'",
+                label
+            ));
+            window.show().map_err(|e| e.to_string())?;
+            window.set_focus().map_err(|e| e.to_string())?;
+            return Ok(());
+        }
     }
-    Ok(())
+
+    // 2. 없으면 새로 생성 (유니크 라벨 사용)
+    let new_label = format!("main_window_{}", uuid::Uuid::new_v4());
+    log_to_file(&format!(
+        "open_main_window: Creating new window '{}'...",
+        new_label
+    ));
+
+    // 저장된 크기 불러오기
+    let index = read_index()?;
+    let (width, height) = if let Some(size) = index.main_window {
+        (size.width, size.height)
+    } else {
+        (600.0, 800.0)
+    };
+
+    log_to_file(&format!(
+        "open_main_window: Target size {}x{}",
+        width, height
+    ));
+
+    let builder = tauri::WebviewWindowBuilder::new(
+        &app,
+        &new_label,
+        tauri::WebviewUrl::App("".into()), // 루트 경로 사용
+    )
+    .title("Sticky Notes")
+    .inner_size(width, height)
+    .min_inner_size(400.0, 200.0)
+    .decorations(false)
+    .transparent(false)
+    .resizable(true);
+
+    match builder.build() {
+        Ok(window) => {
+            log_to_file("open_main_window: Window built successfully");
+            if let Err(e) = window.center() {
+                log_to_file(&format!("open_main_window: Failed to center - {}", e));
+            }
+
+            if let Err(e) = window.show() {
+                log_to_file(&format!("open_main_window: Failed to show - {}", e));
+                return Err(e.to_string());
+            }
+
+            if let Err(e) = window.set_focus() {
+                log_to_file(&format!("open_main_window: Failed to set focus - {}", e));
+                return Err(e.to_string());
+            }
+
+            log_to_file("open_main_window: Window setup complete");
+            Ok(())
+        }
+        Err(e) => {
+            log_to_file(&format!("open_main_window: Failed to build window - {}", e));
+            Err(e.to_string())
+        }
+    }
 }
 
 // 이미지 파일 바이너리 읽기
@@ -411,6 +481,97 @@ fn save_window_state(id: Option<String>, width: f64, height: f64) -> Result<(), 
     Ok(())
 }
 
+fn log_to_file(msg: &str) {
+    use std::io::Write;
+    if let Ok(mut file) = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open("C:\\Users\\lee\\.gemini\\sticker_debug.log")
+    {
+        let _ = writeln!(file, "[{}] {}", chrono::Utc::now(), msg);
+    }
+}
+
+// 파일 경로로 열기 (CLI, Drag&Drop 공용)
+#[tauri::command]
+async fn open_file_from_path(app: tauri::AppHandle, path: String) -> Result<String, String> {
+    use std::time::SystemTime;
+
+    let path_str = path.clone();
+    let mut index = read_index()?;
+
+    // 1. 이미 등록된 파일인지 확인
+    if let Some(existing_note) = index.notes.iter().find(|n| n.file_path == path_str) {
+        log_to_file(&format!("File already registered: {}", path_str));
+
+        // 윈도우가 열려있는지 확인하고 포커스
+        let label = format!("note_{}", existing_note.id);
+        if let Some(window) = app.get_webview_window(&label) {
+            log_to_file(&format!("Window {} exists, focusing...", label));
+            let _ = window.set_focus();
+        } else {
+            log_to_file(&format!(
+                "Window {} not open, doing nothing (just registered).",
+                label
+            ));
+        }
+
+        return Ok(existing_note.id.clone());
+    }
+
+    // 2. 등록되지 않은 경우 새로 등록
+    log_to_file(&format!("Registering new file: {}", path_str));
+    let new_id = uuid::Uuid::new_v4().to_string();
+
+    // 파일 내용 읽어서 제목 추출 (lossy utf8 처리)
+    let content_bytes = fs::read(&path).map_err(|e| e.to_string())?;
+    let content = String::from_utf8_lossy(&content_bytes).to_string();
+    let title = extract_title(&content);
+
+    let now: chrono::DateTime<chrono::Utc> = SystemTime::now().into();
+    let now_str = now.to_rfc3339();
+
+    let new_note = NoteMetadata {
+        id: new_id.clone(),
+        title,
+        file_path: path_str,
+        created_at: now_str.clone(),
+        updated_at: now_str,
+        width: Some(400.0),
+        height: Some(400.0),
+    };
+
+    index.notes.push(new_note);
+    write_index(&index)?;
+
+    // 목록 갱신 이벤트 발행
+    let _ = app.emit("refresh-notes-list", ());
+
+    Ok(new_id)
+}
+
+// 파일 열기 다이얼로그 및 등록 커맨드
+#[tauri::command]
+async fn open_file_with_dialog(app: tauri::AppHandle) -> Result<String, String> {
+    use tauri_plugin_dialog::{DialogExt, FilePath};
+
+    // 1. 파일 선택 다이얼로그
+    let file_path = app
+        .dialog()
+        .file()
+        .add_filter("Markdown", &["md", "markdown"])
+        .blocking_pick_file();
+
+    match file_path {
+        Some(FilePath::Path(path)) => {
+            let path_str = path.to_string_lossy().to_string();
+            // 재사용 가능한 로직 호출
+            open_file_from_path(app, path_str).await
+        }
+        _ => Err("No file selected".to_string()),
+    }
+}
+
 // 노트 삭제 커맨드
 #[tauri::command]
 fn delete_note(app: tauri::AppHandle, id: String) -> Result<(), String> {
@@ -451,6 +612,54 @@ pub fn run() {
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_single_instance::init(|app, args, _cwd| {
+            log_to_file(&format!("Single instance callback: {:?}", args));
+
+            let mut window_found = false;
+            let windows = app.webview_windows();
+
+            // 모든 윈도우를 순회하며 메인 윈도우 찾기
+            for (label, window) in windows {
+                if label == "main" || label.starts_with("main_window") {
+                    log_to_file(&format!(
+                        "Single instance: Found existing window '{}'",
+                        label
+                    ));
+                    let _ = window.set_focus();
+                    window_found = true;
+                    break;
+                }
+            }
+
+            // 윈도우가 없으면 새로 생성 (비동기 호출)
+            if !window_found {
+                log_to_file("Single instance: No main window found, creating new one...");
+                let app_handle = app.clone();
+                tauri::async_runtime::spawn(async move {
+                    let _ = open_main_window(app_handle).await;
+                });
+            }
+
+            if args.len() > 1 {
+                // println!("Single instance args: {:?}", args);
+                for arg in args.iter().skip(1) {
+                    let path = std::path::Path::new(arg);
+                    if path.exists() && path.is_file() {
+                        if let Some(ext) = path.extension() {
+                            if ext == "md" || ext == "markdown" {
+                                log_to_file(&format!("Opening file from single instance: {}", arg));
+                                let app_handle = app.clone();
+                                let arg_path = arg.clone();
+                                tauri::async_runtime::spawn(async move {
+                                    let _ = open_file_from_path(app_handle, arg_path).await;
+                                });
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+        }))
         .invoke_handler(tauri::generate_handler![
             greet,
             get_notes_list,
@@ -468,7 +677,9 @@ pub fn run() {
             frontend_log,
             read_image_binary,
             save_window_state,
-            delete_note
+            delete_note,
+            open_file_with_dialog,
+            open_file_from_path
         ])
         .setup(|app| {
             // 앱 시작 시 메인 윈도우 크기 복원
@@ -486,6 +697,59 @@ pub fn run() {
                     }));
                 }
             }
+
+            // CLI 인자 처리 (파일 연결)
+            let args: Vec<String> = std::env::args().collect();
+            log_to_file(&format!("Setup args: {:?}", args));
+
+            if let Ok(cwd) = std::env::current_dir() {
+                log_to_file(&format!("CWD: {:?}", cwd));
+            }
+
+            if args.len() > 1 {
+                // 첫 번째 인자는 실행 파일 경로이므로 두 번째부터 확인
+                for arg in args.iter().skip(1) {
+                    let path = std::path::Path::new(arg);
+                    let mut abs_path = if path.is_absolute() {
+                        path.to_path_buf()
+                    } else {
+                        std::env::current_dir().unwrap_or_default().join(path)
+                    };
+
+                    // 개발 환경 지원: src-tauri에서 실행 시 상위 디렉토리 확인
+                    if !abs_path.exists() {
+                        if let Ok(cwd) = std::env::current_dir() {
+                            if let Some(parent) = cwd.parent() {
+                                let parent_path = parent.join(path);
+                                if parent_path.exists() {
+                                    abs_path = parent_path;
+                                }
+                            }
+                        }
+                    }
+
+                    log_to_file(&format!(
+                        "Checking path: {:?} (exists: {})",
+                        abs_path,
+                        abs_path.exists()
+                    ));
+
+                    if abs_path.exists() && abs_path.is_file() {
+                        if let Some(ext) = abs_path.extension() {
+                            if ext == "md" || ext == "markdown" {
+                                log_to_file(&format!("Opening file from args: {:?}", abs_path));
+                                let app_handle = app.handle().clone();
+                                let arg_path = abs_path.to_string_lossy().to_string();
+                                tauri::async_runtime::spawn(async move {
+                                    let _ = open_file_from_path(app_handle, arg_path).await;
+                                });
+                                break; // 첫 번째 유효한 파일만 처리
+                            }
+                        }
+                    }
+                }
+            }
+
             Ok(())
         })
         .on_menu_event(|app, event| {
@@ -526,5 +790,19 @@ mod tests {
 
         // 테스트 후 파일 정리
         fs::remove_file(path).unwrap();
+    }
+    #[test]
+    fn test_extract_title_korean() {
+        let content = "# 한글 제목 테스트입니다. 이 제목은 50자가 넘지 않지만 멀티바이트 처리를 테스트합니다.";
+        let title = extract_title(content);
+        assert_eq!(
+            title,
+            "한글 제목 테스트입니다. 이 제목은 50자가 넘지 않지만 멀티바이트 처리를 테스트합니다."
+        );
+
+        let long_content = "# ".to_string() + &"가".repeat(100);
+        let title = extract_title(&long_content);
+        assert_eq!(title.chars().count(), 53); // 50 chars + "..."
+        assert!(title.ends_with("..."));
     }
 }

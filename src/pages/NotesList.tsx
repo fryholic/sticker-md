@@ -3,7 +3,7 @@ import { invoke } from '@tauri-apps/api/core';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { listen } from '@tauri-apps/api/event';
 import { ask } from '@tauri-apps/plugin-dialog';
-import { Trash2 } from 'lucide-react';
+import { Trash2, FolderOpen, SquarePen, Minus, X } from 'lucide-react';
 import type { NotesIndex, NoteMetadata } from '../types/note';
 import { useWindowResize } from '../hooks/useWindowResize';
 
@@ -35,8 +35,25 @@ export const NotesList: React.FC = () => {
             loadNotes();
         });
 
+        const unlistenFileDropPromise = listen('tauri://drag-drop', (event) => {
+            const payload = event.payload as { paths: string[], position: { x: number, y: number } };
+            if (payload && payload.paths && payload.paths.length > 0) {
+                console.log('File dropped:', payload.paths);
+                payload.paths.forEach(async (path) => {
+                    if (path.toLowerCase().endsWith('.md') || path.toLowerCase().endsWith('.markdown')) {
+                        try {
+                            await invoke('open_file_from_path', { path });
+                        } catch (e) {
+                            console.error('Failed to open dropped file:', e);
+                        }
+                    }
+                });
+            }
+        });
+
         return () => {
             unlistenPromise.then(unlisten => unlisten());
+            unlistenFileDropPromise.then(unlisten => unlisten());
         };
     }, []);
 
@@ -102,6 +119,20 @@ export const NotesList: React.FC = () => {
         }
     };
 
+    // 파일 열기
+    const handleOpenFile = async () => {
+        try {
+            const noteId = await invoke<string>('open_file_with_dialog');
+            await handleOpenNote(noteId);
+        } catch (error) {
+            console.error('Failed to open file:', error);
+            // 사용자가 취소한 경우는 에러로 처리하지 않음 (로그만 남김)
+            if (error !== "No file selected") {
+                alert(`Failed to open file: ${error}`);
+            }
+        }
+    };
+
     // useEffect to load notes on mount
     // useEffect(() => {
     //     loadNotes();
@@ -134,7 +165,10 @@ export const NotesList: React.FC = () => {
     }
 
     return (
-        <div className="h-full w-full bg-[#F6F6F6] flex flex-col border border-gray-300 rounded-lg overflow-hidden shadow-xl">
+        <div
+            className="h-full w-full bg-[#F6F6F6] flex flex-col border border-gray-300 rounded-lg overflow-hidden shadow-xl"
+            onContextMenu={(e) => e.preventDefault()}
+        >
             {/* Header Area - Draggable */}
             <div
                 className="h-12 bg-white border-b border-gray-200 flex items-center px-4 shrink-0 select-none cursor-move"
@@ -147,15 +181,25 @@ export const NotesList: React.FC = () => {
                 <div className="flex-grow" />
 
                 {/* 3. Right: Controls */}
-                <div className="flex items-center gap-2 ml-4">
+                <div className="flex items-center gap-1 ml-4">
                     {/* New Note Button */}
                     <button
                         onClick={(e) => { e.stopPropagation(); handleCreateNote(); }}
-                        className="w-8 h-8 flex items-center justify-center bg-blue-500 hover:bg-blue-600 text-white rounded-md transition-colors cursor-pointer z-50 !border-none !shadow-none"
+                        className="w-8 h-8 flex items-center justify-center !bg-white hover:!bg-gray-100 rounded-md text-gray-600 transition-colors cursor-pointer z-50 !border-none !shadow-none"
                         title="New Note"
                         onMouseDown={(e) => e.stopPropagation()}
                     >
-                        <span className="text-xl font-bold leading-none">+</span>
+                        <SquarePen size={20} strokeWidth={2} color="#000000" style={{ minWidth: '20px', minHeight: '20px', display: 'block' }} />
+                    </button>
+
+                    {/* Open File Button */}
+                    <button
+                        onClick={(e) => { e.stopPropagation(); handleOpenFile(); }}
+                        className="w-8 h-8 flex items-center justify-center !bg-white hover:!bg-gray-100 rounded-md text-gray-600 transition-colors cursor-pointer z-50 !border-none !shadow-none"
+                        title="Open File"
+                        onMouseDown={(e) => e.stopPropagation()}
+                    >
+                        <FolderOpen size={20} strokeWidth={2} color="#000000" style={{ minWidth: '20px', minHeight: '20px', display: 'block' }} />
                     </button>
 
                     <div className="w-px h-4 bg-gray-300 mx-1"></div>
@@ -163,19 +207,19 @@ export const NotesList: React.FC = () => {
                     {/* Window Controls */}
                     <button
                         onClick={(e) => { e.stopPropagation(); handleMinimize(); }}
-                        className="w-8 h-8 flex items-center justify-center hover:bg-gray-100 rounded-md text-gray-600 transition-colors cursor-pointer z-50 !border-none !shadow-none"
+                        className="w-8 h-8 flex items-center justify-center !bg-white hover:!bg-gray-100 rounded-md text-gray-600 transition-colors cursor-pointer z-50 !border-none !shadow-none"
                         title="Minimize"
                         onMouseDown={(e) => e.stopPropagation()}
                     >
-                        &minus;
+                        <Minus size={20} strokeWidth={2} color="#000000" style={{ minWidth: '20px', minHeight: '20px', display: 'block' }} />
                     </button>
                     <button
                         onClick={(e) => { e.stopPropagation(); handleClose(); }}
-                        className="w-8 h-8 flex items-center justify-center hover:bg-red-500 hover:text-white rounded-md text-gray-600 transition-colors cursor-pointer z-50 !border-none !shadow-none"
+                        className="w-8 h-8 flex items-center justify-center !bg-white hover:!bg-gray-100 rounded-md text-gray-600 transition-colors cursor-pointer z-50 !border-none !shadow-none"
                         title="Close"
                         onMouseDown={(e) => e.stopPropagation()}
                     >
-                        &times;
+                        <X size={20} strokeWidth={2} color="#000000" style={{ minWidth: '20px', minHeight: '20px', display: 'block' }} />
                     </button>
                 </div>
             </div>
@@ -183,9 +227,11 @@ export const NotesList: React.FC = () => {
             {/* Notes Grid Area */}
             <div className="flex-1 overflow-auto p-6">
                 {notes.length === 0 ? (
-                    <div className="text-center py-12">
+                    <div className="text-center py-12 select-none">
                         <p className="text-gray-400 text-lg font-medium">No notes yet</p>
-                        <p className="text-gray-500 text-sm mt-2">Click "+" to create your first note</p>
+                        <div className="text-gray-500 text-sm mt-2 flex items-center justify-center gap-1">
+                            Click <SquarePen size={16} className="inline" /> to create your first note
+                        </div>
                     </div>
                 ) : (
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
