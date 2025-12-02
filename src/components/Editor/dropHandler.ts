@@ -62,7 +62,7 @@ export const setupDropHandler = (view: EditorView) => {
 
 // DOM 핸들러를 export하여 CodeMirrorEditor에서 사용할 수 있게 함
 export const dropEventHandler = EditorView.domEventHandlers({
-    dragover(event, view) {
+    dragover(event, _view) {
         event.preventDefault();
         return false; // Let CodeMirror handle cursor, but prevent default browser action
     },
@@ -139,7 +139,7 @@ export const dropEventHandler = EditorView.domEventHandlers({
                         try {
                             const bytes = Array.from(new Uint8Array(buffer));
                             // Invoke Rust command to save image
-                            const savedPath = await invoke('save_image', {
+                            const savedPath = await invoke<string>('save_image', {
                                 name: file.name,
                                 data: bytes
                             });
