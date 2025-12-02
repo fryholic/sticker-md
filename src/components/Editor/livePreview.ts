@@ -8,7 +8,7 @@ import {
 } from "@codemirror/view";
 import { syntaxTree } from "@codemirror/language";
 import { Range } from "@codemirror/state";
-import { convertFileSrc } from "@tauri-apps/api/core";
+import { loadLocalImage } from "../../utils/imageLoader";
 
 // Decorations
 const hideDecoration = Decoration.replace({});
@@ -20,10 +20,17 @@ const headerDecoration = (level: number) => Decoration.mark({ class: `cm-header-
 const blockquoteDecoration = Decoration.line({ class: "cm-blockquote" });
 const tableDecoration = Decoration.line({ class: "cm-table" });
 
+// Global cache for Blob URLs to prevent unnecessary re-fetching
+const blobCache = new Map<string, string>();
+
 // Widget for Checkbox
 class CheckboxWidget extends WidgetType {
     constructor(readonly checked: boolean, readonly pos: number, readonly view: EditorView) {
         super();
+    }
+
+    eq(other: CheckboxWidget) {
+        return this.checked === other.checked && this.pos === other.pos;
     }
 
     toDOM() {
@@ -76,15 +83,44 @@ class ImageWidget extends WidgetType {
         super();
     }
 
+    eq(other: ImageWidget) {
+        return this.url === other.url && this.alt === other.alt;
+    }
+
     toDOM() {
         const img = document.createElement("img");
-        let src = this.url;
-        if (!src.startsWith("http") && !src.startsWith("data:")) {
-            src = convertFileSrc(src);
-        }
-        img.src = src;
-        img.alt = this.alt;
+        const url = this.url;
+
         img.className = "cm-image-widget max-w-full h-auto rounded-lg shadow-md my-2";
+        img.alt = this.alt;
+
+        // 웹 이미지나 Data URL은 그대로 사용
+        if (url.startsWith("http") || url.startsWith("https") || url.startsWith("data:")) {
+            img.src = url;
+            return img;
+        }
+
+        // 로컬 이미지 처리
+        // 1. 캐시 확인
+        if (blobCache.has(url)) {
+            img.src = blobCache.get(url)!;
+            return img;
+        }
+
+        // 2. 캐시에 없으면 비동기 로드
+        img.alt = "Loading...";
+
+        loadLocalImage(url).then(blobUrl => {
+            blobCache.set(url, blobUrl);
+            // 이미지가 DOM에 여전히 붙어있는지 확인 후 src 업데이트
+            img.src = blobUrl;
+            img.alt = this.alt;
+        }).catch(err => {
+            console.error(`[LivePreview] Failed to load image ${url}:`, err);
+            img.alt = "Image load failed";
+            img.style.border = "1px solid red";
+        });
+
         return img;
     }
 }

@@ -10,6 +10,7 @@ import { autocompletion } from '@codemirror/autocomplete';
 import { markdownStyles } from './markdownStyles';
 import { livePreview } from './livePreview';
 import { slashCommand } from './slashCommand';
+import { setupDropHandler, dropEventHandler } from './dropHandler';
 
 interface CodeMirrorEditorProps {
     initialContent: string;
@@ -28,6 +29,7 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = ({
     useEffect(() => {
         if (!editorRef.current) return;
 
+        // ... (Theme definition and startState creation) ...
         // Theme definition
         const theme = EditorView.theme({
             '&': {
@@ -105,6 +107,7 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = ({
                     }
                 }),
                 EditorView.contentAttributes.of({ spellcheck: 'false' }),
+                dropEventHandler, // Add DOM drop event handler
             ],
         });
 
@@ -119,7 +122,11 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = ({
         // Focus on mount
         view.focus();
 
+        // Setup Drop Handler
+        const unlistenDropPromise = setupDropHandler(view);
+
         return () => {
+            unlistenDropPromise.then(unlisten => unlisten());
             view.destroy();
         };
     }, []); // Run only once on mount

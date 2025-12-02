@@ -1,12 +1,9 @@
 use serde::{Deserialize, Serialize};
 use std::fs;
-use std::path::{Path, PathBuf};
-use std::sync::Mutex;
+use std::path::PathBuf;
 use tauri::menu::ContextMenu;
 use tauri::Emitter; // Emitter 트레이트 추가
 use tauri::Manager; // ContextMenu 트레이트 추가
-                    // use tauri::http::{Response, StatusCode}; // HTTP 관련 제거
-                    // use percent_encoding::percent_decode_str; // URL 디코딩 제거
 
 #[derive(Serialize, Deserialize, Clone)]
 struct NoteMetadata {
@@ -268,7 +265,8 @@ async fn open_note_window(app: tauri::AppHandle, note_id: String) -> Result<(), 
             .inner_size(width, height)
             .min_inner_size(300.0, 100.0)
             .decorations(false) // 테두리 없음
-            .transparent(false); // 투명도 없음 (일단)
+            .transparent(false) // 투명도 없음 (일단)
+            .disable_drag_drop_handler(); // HTML5 Drag&Drop 사용을 위해 Tauri 핸들러 비활성화
 
     println!("Builder created, building window...");
 
@@ -454,11 +452,40 @@ fn read_image_binary(file_path: String) -> Result<Vec<u8>, String> {
         return Err(format!("Forbidden file extension: {}", extension));
     }
 
-    // 파일 읽기
     match fs::read(&path) {
         Ok(data) => Ok(data),
         Err(e) => Err(format!("Failed to read file: {}", e)),
     }
+}
+
+// 이미지 파일 저장 (Drag & Drop용)
+#[tauri::command]
+fn save_image(name: String, data: Vec<u8>) -> Result<String, String> {
+    println!("Saving image: {} ({} bytes)", name, data.len());
+
+    let notes_dir = get_notes_dir()?;
+    let images_dir = notes_dir.join("images");
+
+    if !images_dir.exists() {
+        fs::create_dir_all(&images_dir).map_err(|e| e.to_string())?;
+    }
+
+    // 이름 중복 방지를 위해 UUID 추가
+    let ext = std::path::Path::new(&name)
+        .extension()
+        .and_then(|e| e.to_str())
+        .unwrap_or("png");
+    let new_name = format!(
+        "{}_{}.{}",
+        name.trim_end_matches(&format!(".{}", ext)),
+        uuid::Uuid::new_v4().simple(),
+        ext
+    );
+    let file_path = images_dir.join(&new_name);
+
+    fs::write(&file_path, data).map_err(|e| e.to_string())?;
+
+    Ok(file_path.to_string_lossy().to_string())
 }
 
 // 윈도우 상태 저장 커맨드
@@ -606,6 +633,32 @@ fn delete_note(app: tauri::AppHandle, id: String) -> Result<(), String> {
     }
 }
 
+// 노트 목록에서만 제거하는 커맨드
+#[tauri::command]
+fn remove_note_from_index(app: tauri::AppHandle, id: String) -> Result<(), String> {
+    let mut index = read_index()?;
+
+    // 해당 노트 찾기
+    if let Some(pos) = index.notes.iter().position(|n| n.id == id) {
+        // 인덱스에서 제거 (파일 삭제 안 함)
+        index.notes.remove(pos);
+        write_index(&index)?;
+
+        // 열린 윈도우 닫기
+        let label = format!("note_{}", id);
+        if let Some(window) = app.get_webview_window(&label) {
+            let _ = window.close();
+        }
+
+        // 목록 갱신 이벤트 발행
+        let _ = app.emit("refresh-notes-list", ());
+
+        Ok(())
+    } else {
+        Err("Note not found".to_string())
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -676,8 +729,10 @@ pub fn run() {
             minimize_window,
             frontend_log,
             read_image_binary,
+            save_image,
             save_window_state,
             delete_note,
+            remove_note_from_index,
             open_file_with_dialog,
             open_file_from_path
         ])
@@ -757,7 +812,6 @@ pub fn run() {
             println!("Menu event: {}", id);
             let _ = app.emit("menu-event", id);
         })
-        // .register_uri_scheme_protocol("sticker", |_app, request| { ... }) // Removed custom protocol
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
@@ -766,6 +820,7 @@ pub fn run() {
 mod tests {
     use super::*;
     use std::io::Read;
+    use std::path::Path;
 
     #[test]
     fn test_save_note() {

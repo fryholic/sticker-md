@@ -48,8 +48,16 @@ export const Note = ({ noteId }: NoteProps) => {
             }
         });
 
+        // Global Drag & Drop handling for Web Images
+        const handleGlobalDragOver = (e: DragEvent) => {
+            e.preventDefault(); // Essential for allowing drops
+        };
+
+        document.addEventListener('dragover', handleGlobalDragOver);
+
         return () => {
             unlistenPromise.then(unlisten => unlisten());
+            document.removeEventListener('dragover', handleGlobalDragOver);
         };
     }, []);
 

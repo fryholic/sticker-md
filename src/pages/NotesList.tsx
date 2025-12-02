@@ -51,6 +51,8 @@ export const NotesList: React.FC = () => {
             }
         });
 
+
+
         return () => {
             unlistenPromise.then(unlisten => unlisten());
             unlistenFileDropPromise.then(unlisten => unlisten());
@@ -100,9 +102,9 @@ export const NotesList: React.FC = () => {
         }
     };
 
-    // 메모 삭제
+    // 메모 삭제 (목록에서만 제거)
     const handleDeleteNote = async (noteId: string) => {
-        const confirmed = await ask('삭제하시겠습니까?', {
+        const confirmed = await ask('목록에서 삭제하시겠습니까?', {
             title: 'StickerMd',
             kind: 'warning',
             okLabel: '예',
@@ -111,10 +113,10 @@ export const NotesList: React.FC = () => {
 
         if (confirmed) {
             try {
-                await invoke('delete_note', { id: noteId });
+                await invoke('remove_note_from_index', { id: noteId });
             } catch (error) {
-                console.error('Failed to delete note:', error);
-                alert(`Failed to delete note: ${error}`);
+                console.error('Failed to remove note from index:', error);
+                alert(`Failed to remove note: ${error}`);
             }
         }
     };
