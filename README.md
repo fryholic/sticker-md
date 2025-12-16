@@ -1,6 +1,6 @@
 # Sticker-MD
 
-![logo](public/logo.jpg)
+![logo](public/logo.png)
 
 **Sticker-MD** is a modern, lightweight sticky notes application built with [Tauri](https://tauri.app/), [React](https://reactjs.org/), and [TypeScript](https://www.typescriptlang.org/). It combines the simplicity of classic sticky notes with the power of Markdown formatting.
 
