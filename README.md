@@ -19,7 +19,7 @@
   - TypeScript
   - TailwindCSS v4
   - Lucide React (Icons)
-  - React Markdown / Remark GFM
+  - React Markdown / Remark GFM / CodeMirror
 - **Backend**:
   - Rust (Tauri v2)
   - Plugins: `fs`, `dialog`, `opener`

@@ -1,6 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
+import { getCurrentWindow } from '@tauri-apps/api/window';
 import { NotesIndex } from '../types/note';
 import { TitleBar } from './TitleBar';
 import { useWindowResize } from '../hooks/useWindowResize';
@@ -18,9 +19,19 @@ export const Note = ({ noteId }: NoteProps) => {
     // 항상 위에 표시 상태 관리
     const [_isAlwaysOnTop, setIsAlwaysOnTop] = useState<boolean>(false);
     // 저장되지 않은 변경사항 상태 관리
-    const [_isDirty, setIsDirty] = useState<boolean>(false);
+    const [isDirty, setIsDirty] = useState<boolean>(false);
     // 파일 경로 상태 관리
     const [filePath, setFilePath] = useState<string | null>(null);
+
+    // Refs for Event Handlers (Always access latest state)
+    const contentRef = useRef(content);
+    const isDirtyRef = useRef(isDirty);
+    const filePathRef = useRef(filePath);
+
+    // Sync Refs
+    useEffect(() => { contentRef.current = content; }, [content]);
+    useEffect(() => { isDirtyRef.current = isDirty; }, [isDirty]);
+    useEffect(() => { filePathRef.current = filePath; }, [filePath]);
     // 데이터 로드 상태
     const [isLoaded, setIsLoaded] = useState<boolean>(false);
 
@@ -100,20 +111,35 @@ export const Note = ({ noteId }: NoteProps) => {
         setIsDirty(true);
     };
 
-    // 파일 저장 핸들러
+    // 파일 저장 핸들러 (Ref 기반)
     const handleSave = async () => {
         try {
-            let currentPath = filePath;
+            const currentContent = contentRef.current;
+            let currentPath = filePathRef.current;
 
             if (!currentPath) {
-                currentPath = await invoke<string>('save_note_with_dialog', { content });
-                setFilePath(currentPath);
+                // 새 파일: 다이얼로그로 저장
+                console.log('New file, showing dialog...');
+                try {
+                    currentPath = await invoke<string>('save_note_with_dialog', { content: currentContent });
+                } catch (dialogErr) {
+                    console.error('Dialog failed or cancelled:', dialogErr);
+                    return false;
+                }
+
+                if (currentPath) {
+                    setFilePath(currentPath);
+                } else {
+                    return false;
+                }
             } else {
-                await invoke('save_note', { path: currentPath, content });
+                // 기존 파일: 즉시 저장
+                await invoke('save_note', { path: currentPath, content: currentContent });
             }
 
+            // 인덱스 등록/갱신
             if (noteId && currentPath) {
-                const title = content.split('\n')[0]?.replace(/^#+\s*/, '').trim().substring(0, 50) || 'Untitled Note';
+                const title = currentContent.split('\n')[0]?.replace(/^#+\s*/, '').trim().substring(0, 50) || 'Untitled Note';
                 await invoke('register_note', {
                     id: noteId,
                     title: title,
@@ -123,10 +149,53 @@ export const Note = ({ noteId }: NoteProps) => {
 
             console.log('Saved successfully');
             setIsDirty(false);
+            return true;
         } catch (error) {
             console.error('Failed to save:', error);
+            return false;
         }
     };
+
+    // Ctrl+S Keydown Handler
+    useEffect(() => {
+        const handleKeyDown = async (e: KeyboardEvent) => {
+            if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+                e.preventDefault();
+                console.log('Ctrl+S pressed');
+                await handleSave();
+            }
+        };
+
+        document.addEventListener('keydown', handleKeyDown);
+        return () => document.removeEventListener('keydown', handleKeyDown);
+    }, [noteId]);
+
+    // Window Close Request Handler
+    useEffect(() => {
+        const unlistenPromise = getCurrentWindow().onCloseRequested(async (event) => {
+            if (isDirtyRef.current) {
+                console.log('Window close requested, but unsaved changes exist.');
+                event.preventDefault();
+
+                // 저장 시도
+                const saved = await handleSave();
+
+                if (saved) {
+                    console.log('Auto-saved successfully. Closing window...');
+                    isDirtyRef.current = false;
+                    await getCurrentWindow().close();
+                } else {
+                    console.log('Save cancelled or failed. Window remains open.');
+                }
+            }
+        });
+
+        return () => {
+            unlistenPromise.then(unlisten => {
+                unlisten();
+            });
+        };
+    }, []);
 
     // 윈도우 컨트롤 핸들러들
     const handleClose = async () => {
