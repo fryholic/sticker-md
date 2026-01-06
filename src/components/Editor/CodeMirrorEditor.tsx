@@ -40,6 +40,7 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = ({
             '.cm-content': {
                 fontFamily: 'inherit',
                 padding: '0', // Remove default padding to match textarea feel
+                textRendering: 'auto', // Fix for IME candidate window position issue
             },
             '.cm-scroller': {
                 fontFamily: 'inherit',

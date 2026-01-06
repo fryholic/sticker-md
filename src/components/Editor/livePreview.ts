@@ -17,6 +17,7 @@ const italicDecoration = Decoration.mark({ class: "cm-italic" });
 const strikethroughDecoration = Decoration.mark({ class: "cm-strikethrough" });
 const inlineCodeDecoration = Decoration.mark({ class: "cm-inline-code" });
 const headerDecoration = (level: number) => Decoration.mark({ class: `cm-header-${level}` });
+const normalWeightDecoration = Decoration.mark({ class: "cm-normal-weight" });
 const blockquoteDecoration = Decoration.line({ class: "cm-blockquote" });
 const tableDecoration = Decoration.line({ class: "cm-table" });
 
@@ -231,23 +232,30 @@ const livePreviewPlugin = ViewPlugin.fromClass(
                         // Setext Heading (H1\n===)
                         else if (typeName.startsWith("SetextHeading")) {
                             const level = typeName === "SetextHeading1" ? 1 : 2;
-
-                            // Style the content
-                            widgets.push(headerDecoration(level).range(node.from, node.to));
-
-                            // Hide the underline
                             const text = view.state.sliceDoc(node.from, node.to);
-                            const underlineMatch = text.match(/\n[ \t]*[-=]+[ \t]*$/);
-                            if (underlineMatch) {
-                                // underlineMatch[0] starts with \n. We must NOT replace the newline.
-                                // So we start at index + 1.
-                                const underlineStart = node.from + underlineMatch.index! + 1;
-                                const line = view.state.doc.lineAt(node.from); // First line (text)
-                                const line2 = view.state.doc.lineAt(node.to); // Second line (underline)
 
-                                // Check if cursor is on EITHER line
-                                if (!isCursorInside(selection, line.from, line2.to)) {
-                                    widgets.push(hideDecoration.range(underlineStart, node.to));
+                            // Check underline length
+                            const match = text.match(/\n[ \t]*([-=]+)[ \t]*$/);
+                            if (match) {
+                                const underlineChars = match[1];
+                                if (underlineChars.length >= 2) {
+                                    // Valid Header: Apply H1/H2 style (adds fontSize & bold from livePreview class)
+                                    widgets.push(headerDecoration(level).range(node.from, node.to));
+
+                                    // Check if cursor is on EITHER line to decide whether to hide underline
+                                    // match[0] starts with \n. We must NOT replace the newline.
+                                    // So we start at index + 1.
+                                    const underlineStart = node.from + match.index! + 1;
+                                    const line = view.state.doc.lineAt(node.from); // First line (text)
+                                    const line2 = view.state.doc.lineAt(node.to); // Second line (underline)
+
+                                    if (!isCursorInside(selection, line.from, line2.to)) {
+                                        widgets.push(hideDecoration.range(underlineStart, node.to));
+                                    }
+                                } else {
+                                    // Invalid Header (length < 2): 
+                                    // Just ensure it's not bold. fontSize is already normal (removed from markdownStyles).
+                                    widgets.push(normalWeightDecoration.range(node.from, node.to));
                                 }
                             }
                         }
@@ -373,6 +381,7 @@ export const livePreview = [
         ".cm-bold": { fontWeight: "bold" },
         ".cm-italic": { fontStyle: "italic" },
         ".cm-strikethrough": { textDecoration: "line-through" },
+        ".cm-normal-weight": { fontWeight: "normal !important", textDecoration: "none" },
         ".cm-header-1": { fontSize: "1.6em", fontWeight: "bold" },
         ".cm-header-2": { fontSize: "1.4em", fontWeight: "bold" },
         ".cm-header-3": { fontSize: "1.2em", fontWeight: "bold" },
@@ -380,7 +389,11 @@ export const livePreview = [
         ".cm-header-5": { fontSize: "1em", fontWeight: "bold" },
         ".cm-header-6": { fontSize: "1em", fontWeight: "bold", color: "#6B7280" },
         ".cm-blockquote": { borderLeft: "4px solid #E5E7EB", paddingLeft: "1em", color: "#6B7280" },
-        ".cm-codeblock": { position: "relative", fontFamily: "monospace" },
+        ".cm-codeblock": {
+            position: "relative",
+            fontFamily: "'D2Coding', 'Consolas', 'Monaco', 'Andale Mono', 'Ubuntu Mono', monospace",
+            color: "#E5E7EB", // gray-200 (Default Text Color for Code Block)
+        },
         ".cm-codeblock::before": {
             content: '""',
             position: "absolute",
@@ -388,15 +401,23 @@ export const livePreview = [
             bottom: "0",
             left: "var(--indent, 0)",
             right: "0",
-            backgroundColor: "#F3F4F6",
+            backgroundColor: "#1E293B", // slate-800(Dark Navy)
             zIndex: "-1",
         },
-        ".cm-codeblock-first::before": { borderTopLeftRadius: "0.25em", borderTopRightRadius: "0.25em" },
-        ".cm-codeblock-last::before": { borderBottomLeftRadius: "0.25em", borderBottomRightRadius: "0.25em" },
+        ".cm-codeblock-first::before": {
+            borderTopLeftRadius: "0.375em",
+            borderTopRightRadius: "0.375em",
+            paddingTop: "0.2em"
+        },
+        ".cm-codeblock-last::before": {
+            borderBottomLeftRadius: "0.375em",
+            borderBottomRightRadius: "0.375em",
+            paddingBottom: "0.2em"
+        },
         ".cm-inline-code": {
             backgroundColor: "#F3F4F6",
             borderRadius: "0.25em",
-            fontFamily: "monospace",
+            fontFamily: "'D2Coding', 'Consolas', 'Monaco', 'Andale Mono', 'Ubuntu Mono', monospace",
             padding: "0.1em 0.3em",
         },
         ".cm-table": { /* Add table specific styling here if needed, e.g., border-collapse */ }

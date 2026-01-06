@@ -1,6 +1,7 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
 import "./index.css";
+import "pretendard/dist/web/variable/pretendardvariable.css";
 import App from "./App";
 import { invoke } from "@tauri-apps/api/core";
 
