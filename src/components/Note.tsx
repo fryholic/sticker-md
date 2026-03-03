@@ -34,6 +34,8 @@ export const Note = ({ noteId }: NoteProps) => {
     useEffect(() => { filePathRef.current = filePath; }, [filePath]);
     // 데이터 로드 상태
     const [isLoaded, setIsLoaded] = useState<boolean>(false);
+    // 줌 레벨 상태 관리
+    const [zoomLevel, setZoomLevel] = useState<number>(1);
 
     // Window Resize Handler
     useWindowResize(noteId || null);
@@ -170,6 +172,26 @@ export const Note = ({ noteId }: NoteProps) => {
         return () => document.removeEventListener('keydown', handleKeyDown);
     }, [noteId]);
 
+    // Ctrl + 휠 화면 확대/축소 핸들러
+    useEffect(() => {
+        const handleWheel = (e: WheelEvent) => {
+            if (e.ctrlKey) {
+                e.preventDefault(); // 브라우저 기본 줌 방지
+                setZoomLevel(prev => {
+                    // 크롬 기반 WebView에서 wheelDelta를 사용하는 대신 범용적인 deltaY 활용
+                    const delta = e.deltaY < 0 ? 0.1 : -0.1;
+                    const newZoom = prev + delta;
+                    // 최소 50%, 최대 300%로 제한
+                    return Math.min(Math.max(0.5, Number(newZoom.toFixed(1))), 3.0);
+                });
+            }
+        };
+
+        // passive: false로 설정해야 e.preventDefault() 호출 가능
+        document.addEventListener('wheel', handleWheel, { passive: false });
+        return () => document.removeEventListener('wheel', handleWheel);
+    }, []);
+
     // Window Close Request Handler
     useEffect(() => {
         const unlistenPromise = getCurrentWindow().onCloseRequested(async (event) => {
@@ -229,7 +251,10 @@ export const Note = ({ noteId }: NoteProps) => {
                 onSave={handleSave}
             />
 
-            <div className="flex-grow overflow-hidden relative mt-8 mb-4 mx-4">
+            <div
+                className="flex-grow overflow-hidden relative mt-8 mb-4 mx-4"
+                style={{ zoom: zoomLevel }}
+            >
                 {isLoaded && (
                     <CodeMirrorEditor
                         initialContent={content}
